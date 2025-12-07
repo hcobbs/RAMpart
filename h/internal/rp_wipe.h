@@ -1,0 +1,178 @@
+/**
+ * @file rp_wipe.h
+ * @brief RAMpart secure memory wiping internals
+ *
+ * Implements secure memory wiping to prevent data recovery from
+ * freed memory. Uses multi-pass overwrite patterns.
+ *
+ * @internal
+ *
+ * @section wipe Wipe Strategy
+ *
+ * The default wipe strategy uses three passes:
+ * 1. All zeros (0x00)
+ * 2. All ones (0xFF)
+ * 3. Alternating pattern (0xAA)
+ *
+ * This pattern provides reasonable protection against casual data
+ * recovery while maintaining C89 compliance.
+ */
+
+#ifndef RP_WIPE_H
+#define RP_WIPE_H
+
+#include "rp_types.h"
+
+/* ============================================================================
+ * Wipe Pattern Constants
+ * ============================================================================ */
+
+/**
+ * @def RP_WIPE_PASS_COUNT
+ * @brief Number of wipe passes
+ */
+#define RP_WIPE_PASS_COUNT 3
+
+/**
+ * @def RP_WIPE_PATTERN_1
+ * @brief First wipe pass pattern (all zeros)
+ */
+#define RP_WIPE_PATTERN_1 0x00
+
+/**
+ * @def RP_WIPE_PATTERN_2
+ * @brief Second wipe pass pattern (all ones)
+ */
+#define RP_WIPE_PATTERN_2 0xFF
+
+/**
+ * @def RP_WIPE_PATTERN_3
+ * @brief Third wipe pass pattern (alternating)
+ */
+#define RP_WIPE_PATTERN_3 0xAA
+
+/* ============================================================================
+ * Secure Wipe Functions
+ * ============================================================================ */
+
+/**
+ * rp_wipe_memory - Securely wipe memory region
+ *
+ * Performs a multi-pass overwrite of the specified memory region.
+ * Uses compiler barriers to prevent optimization.
+ *
+ * @param ptr       Pointer to memory region
+ * @param size      Size of region in bytes
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_ERR_NULL_PARAM   ptr is NULL
+ *
+ * @note Uses volatile writes to prevent compiler optimization.
+ * @note Performs RP_WIPE_PASS_COUNT passes with different patterns.
+ */
+rampart_error_t rp_wipe_memory(void *ptr, size_t size);
+
+/**
+ * rp_wipe_memory_single - Single-pass memory wipe
+ *
+ * Performs a single-pass overwrite with the specified pattern.
+ * Faster than multi-pass for non-sensitive data.
+ *
+ * @param ptr       Pointer to memory region
+ * @param size      Size of region in bytes
+ * @param pattern   Byte pattern to write
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_ERR_NULL_PARAM   ptr is NULL
+ *
+ * @note Uses volatile writes to prevent compiler optimization.
+ */
+rampart_error_t rp_wipe_memory_single(void *ptr,
+                                       size_t size,
+                                       unsigned char pattern);
+
+/**
+ * rp_wipe_block_user_data - Wipe block's user data region
+ *
+ * Securely wipes only the user data portion of a block, leaving
+ * headers and guard bands intact.
+ *
+ * @param block     Pointer to block header
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_ERR_NULL_PARAM   block is NULL
+ *
+ * @note Block must be initialized (user_size must be valid).
+ */
+rampart_error_t rp_wipe_block_user_data(rp_block_header_t *block);
+
+/**
+ * rp_wipe_block_full - Wipe entire block including metadata
+ *
+ * Securely wipes the entire block including headers. Used during
+ * pool shutdown.
+ *
+ * @param block         Pointer to block header
+ * @param total_size    Total block size in bytes
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_ERR_NULL_PARAM   block is NULL
+ *
+ * @note Block cannot be used after this call.
+ */
+rampart_error_t rp_wipe_block_full(rp_block_header_t *block, size_t total_size);
+
+/* ============================================================================
+ * Verification Functions
+ * ============================================================================ */
+
+/**
+ * rp_wipe_verify - Verify memory was wiped
+ *
+ * Checks that a memory region contains only the expected pattern.
+ * Useful for testing and validation.
+ *
+ * @param ptr       Pointer to memory region
+ * @param size      Size of region in bytes
+ * @param pattern   Expected byte pattern
+ *
+ * @return RAMPART_OK if pattern matches, RAMPART_ERR_INTERNAL if not
+ *
+ * @note Used for testing; not typically called in production.
+ */
+rampart_error_t rp_wipe_verify(const void *ptr,
+                                size_t size,
+                                unsigned char pattern);
+
+/* ============================================================================
+ * Utility Functions
+ * ============================================================================ */
+
+/**
+ * rp_wipe_volatile_write - Write byte with volatile semantics
+ *
+ * Performs a single volatile byte write. Prevents compiler from
+ * optimizing away the write.
+ *
+ * @param ptr       Pointer to byte
+ * @param value     Value to write
+ *
+ * @note This is a low-level function used by higher-level wipe functions.
+ */
+void rp_wipe_volatile_write(volatile unsigned char *ptr, unsigned char value);
+
+/**
+ * rp_wipe_memory_barrier - Memory barrier
+ *
+ * Issues a compiler memory barrier to prevent reordering of
+ * memory operations around the wipe.
+ *
+ * @note Implementation is platform-specific but C89 compatible.
+ */
+void rp_wipe_memory_barrier(void);
+
+#endif /* RP_WIPE_H */

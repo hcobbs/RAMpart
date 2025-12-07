@@ -1,0 +1,25 @@
+# Build artifacts
+obj/
+lib/
+bin/
+
+# Coverage files
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.orig

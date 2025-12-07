@@ -10,28 +10,27 @@
 #include "internal/rp_types.h"
 
 /* ============================================================================
- * Compiler Barrier
+ * Compiler/Memory Barrier
  * ============================================================================
- * Prevent the compiler from optimizing away our writes.
+ * Prevent the compiler from optimizing away our writes and ensure
+ * writes are visible to memory.
  */
 
 void rp_wipe_memory_barrier(void) {
+#ifdef RP_PLATFORM_WINDOWS
+    /* Windows memory barrier ensures writes complete */
+    MemoryBarrier();
+#elif defined(__GNUC__)
+    /* GCC/Clang memory barrier (works even in C89 mode) */
+    __asm__ __volatile__("" ::: "memory");
+#else
     /*
-     * C89 doesn't have standard memory barriers.
-     * This volatile access serves as a compiler barrier on most platforms.
-     * For production use on specific platforms, platform-specific
-     * barriers should be used.
+     * Fallback for other compilers.
+     * The volatile read/write serves as a compiler barrier.
      */
     static volatile int barrier_dummy = 0;
     barrier_dummy = barrier_dummy;
-}
-
-/* ============================================================================
- * Volatile Write
- * ============================================================================ */
-
-void rp_wipe_volatile_write(volatile unsigned char *ptr, unsigned char value) {
-    *ptr = value;
+#endif
 }
 
 /* ============================================================================

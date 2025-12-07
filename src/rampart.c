@@ -11,7 +11,6 @@
 #include "internal/rp_block.h"
 #include "internal/rp_thread.h"
 #include "internal/rp_wipe.h"
-#include "internal/rp_crypto.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -270,34 +269,16 @@ void *rampart_alloc(rampart_pool_t *pool, size_t size) {
     /* Zero-initialize user data */
     rp_block_zero_user_data(block);
 
-    /* Encrypt if enabled (encrypt zeros for now) */
-    if (p->encryption_enabled) {
-        rp_cipher_ctx_t ctx;
-        err = rp_crypto_init_ctx(&ctx, p->encryption_key, p->encryption_key_size);
-        if (err == RAMPART_OK) {
-            user_ptr = rp_block_get_user_ptr(block);
-            rp_crypto_encrypt(&ctx, (unsigned char *)user_ptr, block->user_size);
-            rp_block_set_encrypted(block, 1);
-            rp_crypto_destroy_ctx(&ctx);
-        }
-    }
+    user_ptr = rp_block_get_user_ptr(block);
 
     rp_pool_unlock(p);
 
-    user_ptr = rp_block_get_user_ptr(block);
-
-    /* If encrypted, decrypt for user access */
-    if (rp_block_is_encrypted(block)) {
-        rp_cipher_ctx_t ctx;
-        rp_pool_lock(p);
-        err = rp_crypto_init_ctx(&ctx, p->encryption_key, p->encryption_key_size);
-        if (err == RAMPART_OK) {
-            rp_crypto_decrypt(&ctx, (unsigned char *)user_ptr, block->user_size);
-            rp_block_set_encrypted(block, 0);
-            rp_crypto_destroy_ctx(&ctx);
-        }
-        rp_pool_unlock(p);
-    }
+    /*
+     * Note: Encryption-at-rest is not applied here. Raw pointer access
+     * bypasses encryption. For encryption to work, accessor functions
+     * (rampart_read/rampart_write) must be used. Those functions are
+     * not yet implemented. The encryption key is stored for future use.
+     */
 
     return user_ptr;
 }
@@ -344,12 +325,12 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
     err = rp_block_validate_magic(block);
     if (err != RAMPART_OK) {
         if (block->magic == RP_BLOCK_FREED_MAGIC) {
-            rp_pool_unlock(p);
             invoke_callback(p, RAMPART_ERR_DOUBLE_FREE, ptr);
+            rp_pool_unlock(p);
             return RAMPART_ERR_DOUBLE_FREE;
         }
-        rp_pool_unlock(p);
         invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+        rp_pool_unlock(p);
         return RAMPART_ERR_INVALID_BLOCK;
     }
 
@@ -357,8 +338,8 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
     if (p->strict_thread_mode) {
         err = rp_thread_verify_owner(block);
         if (err != RAMPART_OK) {
-            rp_pool_unlock(p);
             invoke_callback(p, RAMPART_ERR_WRONG_THREAD, ptr);
+            rp_pool_unlock(p);
             return RAMPART_ERR_WRONG_THREAD;
         }
     }
@@ -367,8 +348,8 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
     if (p->validate_on_free) {
         err = rp_block_validate_guards(block);
         if (err != RAMPART_OK) {
-            rp_pool_unlock(p);
             invoke_callback(p, RAMPART_ERR_GUARD_CORRUPTED, ptr);
+            rp_pool_unlock(p);
             return RAMPART_ERR_GUARD_CORRUPTED;
         }
     }

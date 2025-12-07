@@ -16,7 +16,12 @@
 /* ============================================================================
  * S-Box (Substitution Box)
  * ============================================================================
- * A simple S-box for non-linearity in the round function.
+ * This S-box is the AES Rijndael S-box, providing good non-linearity
+ * and resistance to linear/differential cryptanalysis. It is a well-studied
+ * public construction and does not contain any known backdoors.
+ *
+ * Source: FIPS-197 (AES specification)
+ * Each byte is transformed via: S(x) = A * x^(-1) + b (in GF(2^8))
  */
 
 static const unsigned char SBOX[256] = {
@@ -63,6 +68,9 @@ static const unsigned char SBOX[256] = {
  */
 static unsigned long rotate_left(unsigned long val, int n) {
     n = n & 31;  /* Ensure n is in range 0-31 */
+    if (n == 0) {
+        return val & 0xFFFFFFFFUL;
+    }
     return ((val << n) | (val >> (32 - n))) & 0xFFFFFFFFUL;
 }
 
@@ -297,26 +305,28 @@ rampart_error_t rp_crypto_encrypt(const rp_cipher_ctx_t *ctx,
         }
     }
 
-    /* Handle partial final block (if any) */
+    /* Handle partial final block using keystream XOR (CTR-like mode) */
     remainder = size % RP_CRYPTO_BLOCK_SIZE;
     if (remainder > 0) {
-        unsigned char temp_block[RP_CRYPTO_BLOCK_SIZE];
+        unsigned char keystream[RP_CRYPTO_BLOCK_SIZE];
         size_t offset = full_blocks * RP_CRYPTO_BLOCK_SIZE;
+        size_t j;
 
-        /* Pad with zeros */
-        memset(temp_block, 0, RP_CRYPTO_BLOCK_SIZE);
-        memcpy(temp_block, &data[offset], remainder);
+        /* Generate keystream by encrypting block counter */
+        memset(keystream, 0, RP_CRYPTO_BLOCK_SIZE);
+        ulong_to_bytes((unsigned long)full_blocks, &keystream[4]);
 
-        /* Encrypt padded block */
-        err = rp_crypto_encrypt_block(ctx, temp_block);
+        err = rp_crypto_encrypt_block(ctx, keystream);
         if (err != RAMPART_OK) {
-            rp_wipe_memory(temp_block, RP_CRYPTO_BLOCK_SIZE);
+            rp_wipe_memory(keystream, RP_CRYPTO_BLOCK_SIZE);
             return err;
         }
 
-        /* Copy back only the original bytes */
-        memcpy(&data[offset], temp_block, remainder);
-        rp_wipe_memory(temp_block, RP_CRYPTO_BLOCK_SIZE);
+        /* XOR data with keystream (reversible) */
+        for (j = 0; j < remainder; j++) {
+            data[offset + j] ^= keystream[j];
+        }
+        rp_wipe_memory(keystream, RP_CRYPTO_BLOCK_SIZE);
     }
 
     return RAMPART_OK;
@@ -351,26 +361,28 @@ rampart_error_t rp_crypto_decrypt(const rp_cipher_ctx_t *ctx,
         }
     }
 
-    /* Handle partial final block (if any) */
+    /* Handle partial final block using keystream XOR (CTR-like mode) */
     remainder = size % RP_CRYPTO_BLOCK_SIZE;
     if (remainder > 0) {
-        unsigned char temp_block[RP_CRYPTO_BLOCK_SIZE];
+        unsigned char keystream[RP_CRYPTO_BLOCK_SIZE];
         size_t offset = full_blocks * RP_CRYPTO_BLOCK_SIZE;
+        size_t j;
 
-        /* Pad with zeros */
-        memset(temp_block, 0, RP_CRYPTO_BLOCK_SIZE);
-        memcpy(temp_block, &data[offset], remainder);
+        /* Generate keystream by encrypting block counter (same as encrypt) */
+        memset(keystream, 0, RP_CRYPTO_BLOCK_SIZE);
+        ulong_to_bytes((unsigned long)full_blocks, &keystream[4]);
 
-        /* Decrypt padded block */
-        err = rp_crypto_decrypt_block(ctx, temp_block);
+        err = rp_crypto_encrypt_block(ctx, keystream);
         if (err != RAMPART_OK) {
-            rp_wipe_memory(temp_block, RP_CRYPTO_BLOCK_SIZE);
+            rp_wipe_memory(keystream, RP_CRYPTO_BLOCK_SIZE);
             return err;
         }
 
-        /* Copy back only the original bytes */
-        memcpy(&data[offset], temp_block, remainder);
-        rp_wipe_memory(temp_block, RP_CRYPTO_BLOCK_SIZE);
+        /* XOR data with keystream (reversible - same as encrypt) */
+        for (j = 0; j < remainder; j++) {
+            data[offset + j] ^= keystream[j];
+        }
+        rp_wipe_memory(keystream, RP_CRYPTO_BLOCK_SIZE);
     }
 
     return RAMPART_OK;

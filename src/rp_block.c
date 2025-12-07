@@ -80,8 +80,8 @@ rampart_error_t rp_block_init(rp_block_header_t *block,
     block->owner_thread = owner;
     block->prev = NULL;
     block->next = NULL;
-    block->prev_addr = NULL;
-    block->next_addr = NULL;
+    /* NOTE: prev_addr and next_addr are managed by pool address-order list.
+     * Do NOT clear them here - they may already be set by split_block. */
 
     /* Clear padding */
     memset(block->padding, 0, sizeof(block->padding));

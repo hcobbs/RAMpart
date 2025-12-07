@@ -14,14 +14,13 @@
  * Thread-Local Storage
  * ============================================================================
  * C89 doesn't have _Thread_local, so we use platform-specific mechanisms.
- * For simplicity in this implementation, we use a simple global for the
- * last error (adequate for single-threaded testing; production would use
- * proper TLS).
+ * Windows uses TLS with proper atomic initialization to prevent races.
+ * POSIX uses pthread_once for thread-safe initialization.
  */
 
 #ifdef RP_PLATFORM_WINDOWS
     static DWORD g_tls_index = TLS_OUT_OF_INDEXES;
-    static int g_tls_initialized = 0;
+    static volatile LONG g_tls_init_state = 0;  /* 0=uninit, 1=initing, 2=done */
 #else
     static pthread_key_t g_tls_key;
     static int g_tls_initialized = 0;
@@ -47,14 +46,25 @@ static void init_tls_key(void) {
 #endif
 
 /**
- * ensure_tls_initialized - Ensure TLS is set up
+ * ensure_tls_initialized - Ensure TLS is set up (thread-safe)
  */
 static void ensure_tls_initialized(void) {
 #ifdef RP_PLATFORM_WINDOWS
-    if (!g_tls_initialized) {
+    /* Use InterlockedCompareExchange for atomic initialization */
+    if (g_tls_init_state == 2) {
+        return;  /* Already initialized */
+    }
+
+    /* Try to claim initialization rights (0 -> 1) */
+    if (InterlockedCompareExchange(&g_tls_init_state, 1, 0) == 0) {
+        /* We won the race, do initialization */
         g_tls_index = TlsAlloc();
-        if (g_tls_index != TLS_OUT_OF_INDEXES) {
-            g_tls_initialized = 1;
+        /* Mark complete (1 -> 2), even if TlsAlloc failed */
+        InterlockedExchange(&g_tls_init_state, 2);
+    } else {
+        /* Another thread is initializing, spin until done */
+        while (g_tls_init_state != 2) {
+            Sleep(0);  /* Yield to other threads */
         }
     }
 #else
@@ -243,7 +253,7 @@ void rp_thread_set_last_error(rampart_error_t error) {
     ensure_tls_initialized();
 
 #ifdef RP_PLATFORM_WINDOWS
-    if (g_tls_initialized) {
+    if (g_tls_index != TLS_OUT_OF_INDEXES) {
         TlsSetValue(g_tls_index, (LPVOID)(size_t)error);
     } else {
         g_last_error_fallback = error;
@@ -263,7 +273,7 @@ rampart_error_t rp_thread_get_last_error(void) {
     ensure_tls_initialized();
 
 #ifdef RP_PLATFORM_WINDOWS
-    if (g_tls_initialized) {
+    if (g_tls_index != TLS_OUT_OF_INDEXES) {
         error = (rampart_error_t)(size_t)TlsGetValue(g_tls_index);
         TlsSetValue(g_tls_index, (LPVOID)RAMPART_OK);
     } else {

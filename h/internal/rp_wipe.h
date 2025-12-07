@@ -153,19 +153,6 @@ rampart_error_t rp_wipe_verify(const void *ptr,
  * ============================================================================ */
 
 /**
- * rp_wipe_volatile_write - Write byte with volatile semantics
- *
- * Performs a single volatile byte write. Prevents compiler from
- * optimizing away the write.
- *
- * @param ptr       Pointer to byte
- * @param value     Value to write
- *
- * @note This is a low-level function used by higher-level wipe functions.
- */
-void rp_wipe_volatile_write(volatile unsigned char *ptr, unsigned char value);
-
-/**
  * rp_wipe_memory_barrier - Memory barrier
  *
  * Issues a compiler memory barrier to prevent reordering of

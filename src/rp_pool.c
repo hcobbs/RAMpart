@@ -88,9 +88,14 @@ rp_pool_header_t *rp_pool_init(void *pool_memory,
 }
 
 void rp_pool_destroy(rp_pool_header_t *pool) {
+    size_t total_size;
+
     if (pool == NULL) {
         return;
     }
+
+    /* Save total_size before any wiping (prevents use-after-wipe) */
+    total_size = pool->total_size;
 
     /* Securely wipe encryption key */
     rp_wipe_memory(pool->encryption_key, sizeof(pool->encryption_key));
@@ -99,7 +104,7 @@ void rp_pool_destroy(rp_pool_header_t *pool) {
     rp_mutex_destroy(&pool->mutex);
 
     /* Wipe entire pool memory */
-    rp_wipe_memory(pool, pool->total_size);
+    rp_wipe_memory(pool, total_size);
 }
 
 /* ============================================================================

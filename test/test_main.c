@@ -26,6 +26,7 @@ extern void run_pool_tests(void);
 extern void run_block_tests(void);
 extern void run_crypto_tests(void);
 extern void run_wipe_tests(void);
+extern void run_guard_tests(void);
 extern void run_thread_tests(void);
 extern void run_integration_tests(void);
 
@@ -960,7 +961,6 @@ static void test_multithread_stress(void) {
  * ============================================================================ */
 
 int main(int argc, char *argv[]) {
-    int result = 0;
     int i;
 
     /* Parse command line arguments */
@@ -995,20 +995,17 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_leak_detection);
     RUN_TEST(test_stats_basic);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Thread Safety Tests */
     TEST_SUITE_BEGIN("Thread Safety Tests");
     RUN_TEST(test_thread_safety_basic);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Stress Tests */
     TEST_SUITE_BEGIN("Stress Tests");
     RUN_TEST(test_stress_alloc_free);
     RUN_TEST(test_stress_varying_sizes);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Out of Memory Tests */
     TEST_SUITE_BEGIN("Out of Memory Tests");
@@ -1016,7 +1013,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_large_allocation_failure);
     RUN_TEST(test_recovery_after_oom);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Allocation/Deallocation Tests */
     TEST_SUITE_BEGIN("Allocation/Deallocation Tests");
@@ -1024,35 +1020,35 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_alloc_sizes);
     RUN_TEST(test_calloc_overflow);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Memory Leak Detection Tests */
     TEST_SUITE_BEGIN("Memory Leak Tests");
     RUN_TEST(test_leak_multiple_blocks);
     RUN_TEST(test_get_leaks_api);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Orphan Memory Tests */
     TEST_SUITE_BEGIN("Orphan Memory Tests");
     RUN_TEST(test_orphan_on_shutdown);
     RUN_TEST(test_partial_cleanup_orphan);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
     /* Multi-Thread Stress Test */
     TEST_SUITE_BEGIN("Multi-Thread Stress Tests");
     RUN_TEST(test_multithread_stress);
     TEST_SUITE_END();
-    result |= TEST_SUITE_RESULT();
 
-    printf("\n################################################\n");
-    if (result == 0) {
-        printf("#           ALL TEST SUITES PASSED            #\n");
-    } else {
-        printf("#          SOME TEST SUITES FAILED            #\n");
-    }
-    printf("################################################\n\n");
+    /* External Test Suites */
+    run_crypto_tests();
 
-    return result;
+    run_wipe_tests();
+
+    run_guard_tests();
+
+    run_thread_tests();
+
+    /* Print grand summary with totals across all suites */
+    TEST_PRINT_GRAND_SUMMARY();
+
+    return TEST_GRAND_RESULT();
 }

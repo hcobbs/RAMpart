@@ -21,7 +21,13 @@ static pthread_key_t g_tls_key;
 static int g_tls_initialized = 0;
 static pthread_once_t g_tls_once = PTHREAD_ONCE_INIT;
 
-/* Fallback for environments without proper TLS */
+/*
+ * Fallback for environments without proper TLS.
+ * Protected by mutex to prevent race conditions when TLS is unavailable.
+ * Note: This fallback is only used if pthread_key_create() fails, which
+ * should not happen on any modern POSIX system.
+ */
+static pthread_mutex_t g_fallback_mutex = PTHREAD_MUTEX_INITIALIZER;
 static rampart_error_t g_last_error_fallback = RAMPART_OK;
 
 /* ============================================================================
@@ -188,7 +194,10 @@ void rp_thread_set_last_error(rampart_error_t error) {
     if (g_tls_initialized) {
         pthread_setspecific(g_tls_key, (void *)(size_t)error);
     } else {
+        /* Fallback path: protect with mutex to prevent race conditions */
+        pthread_mutex_lock(&g_fallback_mutex);
         g_last_error_fallback = error;
+        pthread_mutex_unlock(&g_fallback_mutex);
     }
 }
 
@@ -201,8 +210,11 @@ rampart_error_t rp_thread_get_last_error(void) {
         error = (rampart_error_t)(size_t)pthread_getspecific(g_tls_key);
         pthread_setspecific(g_tls_key, (void *)RAMPART_OK);
     } else {
+        /* Fallback path: protect with mutex to prevent race conditions */
+        pthread_mutex_lock(&g_fallback_mutex);
         error = g_last_error_fallback;
         g_last_error_fallback = RAMPART_OK;
+        pthread_mutex_unlock(&g_fallback_mutex);
     }
 
     return error;

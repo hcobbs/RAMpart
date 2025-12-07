@@ -83,9 +83,6 @@ rampart_error_t rp_block_init(rp_block_header_t *block,
     /* NOTE: prev_addr and next_addr are managed by pool address-order list.
      * Do NOT clear them here - they may already be set by split_block. */
 
-    /* Clear padding */
-    memset(block->padding, 0, sizeof(block->padding));
-
     return RAMPART_OK;
 }
 
@@ -110,9 +107,6 @@ rampart_error_t rp_block_init_as_free(rp_block_header_t *block,
     block->next = NULL;
     block->prev_addr = NULL;
     block->next_addr = NULL;
-
-    /* Clear padding */
-    memset(block->padding, 0, sizeof(block->padding));
 
     return RAMPART_OK;
 }
@@ -156,9 +150,19 @@ rampart_error_t rp_block_validate_front_guard(const rp_block_header_t *block) {
 
 rampart_error_t rp_block_validate_rear_guard(const rp_block_header_t *block) {
     const unsigned char *rear;
+    size_t min_total_size;
 
     if (block == NULL) {
         return RAMPART_ERR_NULL_PARAM;
+    }
+
+    /*
+     * Validate user_size against total_size before calculating rear guard.
+     * This prevents invalid memory access if the block header is corrupted.
+     */
+    min_total_size = sizeof(rp_block_header_t) + (RP_GUARD_SIZE * 2) + block->user_size;
+    if (block->total_size < min_total_size) {
+        return RAMPART_ERR_INVALID_BLOCK;
     }
 
     rear = (const unsigned char *)block +

@@ -253,17 +253,17 @@ rampart_error_t rp_crypto_decrypt_block(const rp_cipher_ctx_t *ctx,
     left = bytes_to_ulong(&block[0]);
     right = bytes_to_ulong(&block[4]);
 
+    /* Initial swap (undo encryption's final swap before rounds) */
+    temp = left;
+    left = right;
+    right = temp;
+
     /* Feistel rounds in reverse */
     for (i = RP_CRYPTO_ROUNDS - 1; i >= 0; i--) {
         temp = left;
         left = right ^ rp_crypto_round_function(left, ctx->round_keys[i]);
         right = temp;
     }
-
-    /* Final swap (undo last swap from loop) */
-    temp = left;
-    left = right;
-    right = temp;
 
     /* Combine halves back into block */
     ulong_to_bytes(left, &block[0]);

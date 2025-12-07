@@ -39,12 +39,24 @@
  * @brief Global test state structure
  */
 typedef struct test_state_s {
+    /* Per-suite counters (reset each suite) */
     int tests_run;
     int tests_passed;
     int tests_failed;
     int assertions_run;
     int assertions_passed;
     int assertions_failed;
+    /* Grand totals (accumulate across all suites) */
+    int total_tests_run;
+    int total_tests_passed;
+    int total_tests_failed;
+    int total_assertions_run;
+    int total_assertions_passed;
+    int total_assertions_failed;
+    int total_suites_run;
+    int total_suites_passed;
+    int total_suites_failed;
+    /* State */
     const char *current_test;
     const char *suite_name;
     int verbose;
@@ -87,6 +99,20 @@ extern test_state_t g_test_state;
  */
 #define TEST_SUITE_END() \
     do { \
+        /* Accumulate to grand totals */ \
+        g_test_state.total_tests_run += g_test_state.tests_run; \
+        g_test_state.total_tests_passed += g_test_state.tests_passed; \
+        g_test_state.total_tests_failed += g_test_state.tests_failed; \
+        g_test_state.total_assertions_run += g_test_state.assertions_run; \
+        g_test_state.total_assertions_passed += g_test_state.assertions_passed; \
+        g_test_state.total_assertions_failed += g_test_state.assertions_failed; \
+        g_test_state.total_suites_run++; \
+        if (g_test_state.tests_failed == 0) { \
+            g_test_state.total_suites_passed++; \
+        } else { \
+            g_test_state.total_suites_failed++; \
+        } \
+        /* Print suite summary */ \
         printf("\n========================================\n"); \
         printf("Suite: %s - Results\n", g_test_state.suite_name); \
         printf("========================================\n"); \
@@ -359,17 +385,42 @@ extern test_state_t g_test_state;
 #define TEST_ASSERT_MEM_EQ(expected, actual, size) \
     do { \
         size_t _size = (size); \
+        const unsigned char *_exp_mem = (const unsigned char *)(expected); \
+        const unsigned char *_act_mem = (const unsigned char *)(actual); \
         g_test_state.assertions_run++; \
-        if (memcmp((expected), (actual), _size) == 0) { \
+        if (memcmp(_exp_mem, _act_mem, _size) == 0) { \
             g_test_state.assertions_passed++; \
             if (g_test_state.extra_verbose) { \
                 printf("    [PASS] %s == %s (%lu bytes)\n", \
                        #expected, #actual, (unsigned long)_size); \
             } \
         } else { \
+            size_t _diff_idx = 0; \
+            size_t _show_count; \
             g_test_state.assertions_failed++; \
-            printf("\n  ASSERTION FAILED: memory equal\n"); \
-            printf("    Size: %lu bytes\n", (unsigned long)_size); \
+            while (_diff_idx < _size && _exp_mem[_diff_idx] == _act_mem[_diff_idx]) { \
+                _diff_idx++; \
+            } \
+            printf("\n  ASSERTION FAILED: memory not equal\n"); \
+            printf("    Comparing: %s vs %s\n", #expected, #actual); \
+            printf("    Size: %lu bytes, first diff at byte %lu\n", \
+                   (unsigned long)_size, (unsigned long)_diff_idx); \
+            printf("    Expected[%lu]: 0x%02X, Actual[%lu]: 0x%02X\n", \
+                   (unsigned long)_diff_idx, _exp_mem[_diff_idx], \
+                   (unsigned long)_diff_idx, _act_mem[_diff_idx]); \
+            _show_count = (_size - _diff_idx > 8) ? 8 : (_size - _diff_idx); \
+            if (_show_count > 1) { \
+                size_t _j; \
+                printf("    Expected bytes from diff: "); \
+                for (_j = 0; _j < _show_count; _j++) { \
+                    printf("%02X ", _exp_mem[_diff_idx + _j]); \
+                } \
+                printf("\n    Actual bytes from diff:   "); \
+                for (_j = 0; _j < _show_count; _j++) { \
+                    printf("%02X ", _act_mem[_diff_idx + _j]); \
+                } \
+                printf("\n"); \
+            } \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -393,7 +444,8 @@ extern test_state_t g_test_state;
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s == RAMPART_OK\n", #err); \
-            printf("    Actual: %d\n", (int)_err_val); \
+            printf("    Actual: %s (%d)\n", \
+                   rampart_error_string(_err_val), (int)_err_val); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -408,20 +460,23 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_ERR(expected, actual) \
     do { \
-        int _exp_err = (int)(expected); \
-        int _act_err = (int)(actual); \
+        rampart_error_t _exp_err = (rampart_error_t)(expected); \
+        rampart_error_t _act_err = (rampart_error_t)(actual); \
         g_test_state.assertions_run++; \
         if (_exp_err == _act_err) { \
             g_test_state.assertions_passed++; \
             if (g_test_state.extra_verbose) { \
-                printf("    [PASS] %s == %s (error: %d)\n", \
-                       #expected, #actual, _act_err); \
+                printf("    [PASS] %s == %s (%s)\n", \
+                       #expected, #actual, rampart_error_string(_act_err)); \
             } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s == %s\n", \
                    #expected, #actual); \
-            printf("    Expected: %d, Actual: %d\n", _exp_err, _act_err); \
+            printf("    Expected: %s (%d)\n", \
+                   rampart_error_string(_exp_err), (int)_exp_err); \
+            printf("    Actual:   %s (%d)\n", \
+                   rampart_error_string(_act_err), (int)_act_err); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -451,7 +506,51 @@ extern test_state_t g_test_state;
  * @brief Define the global test state (use once in main test file)
  */
 #define DEFINE_TEST_STATE() \
-    test_state_t g_test_state = {0, 0, 0, 0, 0, 0, NULL, NULL, 1, 0}
+    test_state_t g_test_state = { \
+        0, 0, 0, 0, 0, 0,  /* per-suite counters */ \
+        0, 0, 0, 0, 0, 0,  /* grand total counters */ \
+        0, 0, 0,           /* suite counters */ \
+        NULL, NULL, 1, 0   /* state */ \
+    }
+
+/**
+ * @def TEST_PRINT_GRAND_SUMMARY
+ * @brief Print grand summary of all test suites
+ */
+#define TEST_PRINT_GRAND_SUMMARY() \
+    do { \
+        printf("\n################################################\n"); \
+        printf("#           GRAND SUMMARY                      #\n"); \
+        printf("################################################\n"); \
+        printf("Suites:     %d passed, %d failed, %d total\n", \
+               g_test_state.total_suites_passed, \
+               g_test_state.total_suites_failed, \
+               g_test_state.total_suites_run); \
+        printf("Tests:      %d passed, %d failed, %d total\n", \
+               g_test_state.total_tests_passed, \
+               g_test_state.total_tests_failed, \
+               g_test_state.total_tests_run); \
+        printf("Assertions: %d passed, %d failed, %d total\n", \
+               g_test_state.total_assertions_passed, \
+               g_test_state.total_assertions_failed, \
+               g_test_state.total_assertions_run); \
+        printf("################################################\n"); \
+        if (g_test_state.total_tests_failed == 0) { \
+            printf("#           ALL TESTS PASSED                  #\n"); \
+        } else { \
+            printf("#           SOME TESTS FAILED                 #\n"); \
+        } \
+        printf("################################################\n\n"); \
+    } while (0)
+
+/**
+ * @def TEST_GRAND_RESULT
+ * @brief Get overall result across all suites
+ *
+ * @return 0 if all tests passed, 1 if any failed
+ */
+#define TEST_GRAND_RESULT() \
+    (g_test_state.total_tests_failed > 0)
 
 /**
  * @def TEST_SET_VERBOSE

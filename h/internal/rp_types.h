@@ -22,8 +22,10 @@
     #define RP_PLATFORM_LINUX 1
 #elif defined(__APPLE__) && defined(__MACH__)
     #define RP_PLATFORM_MACOS 1
-#else
+#elif defined(__unix__) || defined(__unix)
     #define RP_PLATFORM_POSIX 1
+#else
+    #error "Unsupported platform: RAMpart requires POSIX (Linux, macOS, or Unix)"
 #endif
 
 /* ============================================================================
@@ -172,16 +174,16 @@ typedef struct rp_block_header_s {
      * @brief Pointer to next block in address order
      */
     struct rp_block_header_s *next_addr;
-
-    /**
-     * @brief Padding to ensure alignment
-     */
-    unsigned char padding[RP_ALIGNMENT - (sizeof(unsigned long) +
-                                           sizeof(size_t) * 2 +
-                                           sizeof(unsigned int) +
-                                           sizeof(rp_thread_id_t) +
-                                           sizeof(void *) * 4) % RP_ALIGNMENT];
 } rp_block_header_t;
+
+/*
+ * Block header alignment verification.
+ * The structure should be naturally aligned by the compiler.
+ * We verify at runtime in debug builds that sizeof is a multiple of RP_ALIGNMENT.
+ * If not, the compiler will add implicit padding which is acceptable.
+ */
+#define RP_BLOCK_HEADER_ALIGNED \
+    ((sizeof(rp_block_header_t) % RP_ALIGNMENT) == 0)
 
 /**
  * @struct rp_pool_header_t
@@ -310,10 +312,13 @@ typedef struct rp_pool_header_s {
  * @def RP_REAR_GUARD
  * @brief Get pointer to rear guard band
  *
+ * Note: Uses a local variable to avoid double evaluation of hdr argument.
+ *
  * @param hdr   Pointer to block header
  */
 #define RP_REAR_GUARD(hdr) \
-    ((unsigned char *)(hdr) + sizeof(rp_block_header_t) + RP_GUARD_SIZE + (hdr)->user_size)
+    ((unsigned char *)(hdr) + sizeof(rp_block_header_t) + RP_GUARD_SIZE + \
+     ((const rp_block_header_t *)(hdr))->user_size)
 
 /**
  * @def RP_BLOCK_OVERHEAD

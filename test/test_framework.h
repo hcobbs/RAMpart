@@ -113,7 +113,7 @@ extern test_state_t g_test_state;
  * @return 0 if all tests passed, 1 if any failed
  */
 #define TEST_SUITE_RESULT() \
-    (g_test_state.tests_failed > 0 ? 1 : 0)
+    (g_test_state.tests_failed > 0)
 
 /* ============================================================================
  * Test Case Macros
@@ -298,17 +298,21 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_STR_EQ(expected, actual) \
     do { \
+        const char *_exp = (expected); \
+        const char *_act = (actual); \
+        const char *_exp_disp = "(null)"; \
+        const char *_act_disp = "(null)"; \
         g_test_state.assertions_run++; \
-        if ((expected) != NULL && (actual) != NULL && \
-            strcmp((expected), (actual)) == 0) { \
+        if (_exp != NULL) { _exp_disp = _exp; } \
+        if (_act != NULL) { _act_disp = _act; } \
+        if (_exp != NULL && _act != NULL && \
+            strcmp(_exp, _act) == 0) { \
             g_test_state.assertions_passed++; \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: strings equal\n"); \
-            printf("    Expected: \"%s\"\n", \
-                   (expected) ? (expected) : "(null)"); \
-            printf("    Actual:   \"%s\"\n", \
-                   (actual) ? (actual) : "(null)"); \
+            printf("    Expected: \"%s\"\n", _exp_disp); \
+            printf("    Actual:   \"%s\"\n", _act_disp); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \

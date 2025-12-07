@@ -286,7 +286,7 @@ typedef struct rp_pool_header_s {
  * @param x     Value to align
  * @param a     Alignment (must be power of 2)
  */
-#define RP_ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
+#define RP_ALIGN_UP(x, a) (((x) + ((size_t)(a) - 1)) & ~((size_t)(a) - 1))
 
 /**
  * @def RP_BLOCK_TO_USER

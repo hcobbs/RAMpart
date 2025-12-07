@@ -48,6 +48,7 @@ typedef struct test_state_s {
     const char *current_test;
     const char *suite_name;
     int verbose;
+    int extra_verbose;  /* Show each assertion */
 } test_state_t;
 
 /**
@@ -176,6 +177,9 @@ extern test_state_t g_test_state;
         g_test_state.assertions_run++; \
         if (cond) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s\n", #cond); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s\n", #cond); \
@@ -196,6 +200,9 @@ extern test_state_t g_test_state;
         g_test_state.assertions_run++; \
         if (cond) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s\n", #cond); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s\n", #cond); \
@@ -214,15 +221,20 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_EQ(expected, actual) \
     do { \
+        long _exp_val = (long)(expected); \
+        long _act_val = (long)(actual); \
         g_test_state.assertions_run++; \
-        if ((expected) == (actual)) { \
+        if (_exp_val == _act_val) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s == %s (value: %ld)\n", \
+                       #expected, #actual, _act_val); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s == %s\n", \
                    #expected, #actual); \
-            printf("    Expected: %ld, Actual: %ld\n", \
-                   (long)(expected), (long)(actual)); \
+            printf("    Expected: %ld, Actual: %ld\n", _exp_val, _act_val); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -237,14 +249,20 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_NE(not_expected, actual) \
     do { \
+        long _nexp_val = (long)(not_expected); \
+        long _act_val = (long)(actual); \
         g_test_state.assertions_run++; \
-        if ((not_expected) != (actual)) { \
+        if (_nexp_val != _act_val) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s != %s (%ld != %ld)\n", \
+                       #not_expected, #actual, _nexp_val, _act_val); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s != %s\n", \
                    #not_expected, #actual); \
-            printf("    Both are: %ld\n", (long)(actual)); \
+            printf("    Both are: %ld\n", _act_val); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -258,13 +276,17 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_NULL(ptr) \
     do { \
+        void *_ptr_val = (void *)(ptr); \
         g_test_state.assertions_run++; \
-        if ((ptr) == NULL) { \
+        if (_ptr_val == NULL) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s == NULL\n", #ptr); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s is NULL\n", #ptr); \
-            printf("    Actual: %p\n", (void *)(ptr)); \
+            printf("    Actual: %p\n", _ptr_val); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -278,9 +300,13 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_NOT_NULL(ptr) \
     do { \
+        void *_ptr_val = (void *)(ptr); \
         g_test_state.assertions_run++; \
-        if ((ptr) != NULL) { \
+        if (_ptr_val != NULL) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s != NULL (ptr: %p)\n", #ptr, _ptr_val); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s is not NULL\n", #ptr); \
@@ -308,6 +334,10 @@ extern test_state_t g_test_state;
         if (_exp != NULL && _act != NULL && \
             strcmp(_exp, _act) == 0) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s == %s (\"%s\")\n", \
+                       #expected, #actual, _act_disp); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: strings equal\n"); \
@@ -328,13 +358,18 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_MEM_EQ(expected, actual, size) \
     do { \
+        size_t _size = (size); \
         g_test_state.assertions_run++; \
-        if (memcmp((expected), (actual), (size)) == 0) { \
+        if (memcmp((expected), (actual), _size) == 0) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s == %s (%lu bytes)\n", \
+                       #expected, #actual, (unsigned long)_size); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: memory equal\n"); \
-            printf("    Size: %lu bytes\n", (unsigned long)(size)); \
+            printf("    Size: %lu bytes\n", (unsigned long)_size); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -348,13 +383,17 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_OK(err) \
     do { \
+        rampart_error_t _err_val = (err); \
         g_test_state.assertions_run++; \
-        if ((err) == RAMPART_OK) { \
+        if (_err_val == RAMPART_OK) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s == RAMPART_OK\n", #err); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s == RAMPART_OK\n", #err); \
-            printf("    Actual: %d\n", (int)(err)); \
+            printf("    Actual: %d\n", (int)_err_val); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -369,15 +408,20 @@ extern test_state_t g_test_state;
  */
 #define TEST_ASSERT_ERR(expected, actual) \
     do { \
+        int _exp_err = (int)(expected); \
+        int _act_err = (int)(actual); \
         g_test_state.assertions_run++; \
-        if ((expected) == (actual)) { \
+        if (_exp_err == _act_err) { \
             g_test_state.assertions_passed++; \
+            if (g_test_state.extra_verbose) { \
+                printf("    [PASS] %s == %s (error: %d)\n", \
+                       #expected, #actual, _act_err); \
+            } \
         } else { \
             g_test_state.assertions_failed++; \
             printf("\n  ASSERTION FAILED: %s == %s\n", \
                    #expected, #actual); \
-            printf("    Expected: %d, Actual: %d\n", \
-                   (int)(expected), (int)(actual)); \
+            printf("    Expected: %d, Actual: %d\n", _exp_err, _act_err); \
             printf("    at %s:%d in %s\n", \
                    __FILE__, __LINE__, g_test_state.current_test); \
         } \
@@ -407,6 +451,26 @@ extern test_state_t g_test_state;
  * @brief Define the global test state (use once in main test file)
  */
 #define DEFINE_TEST_STATE() \
-    test_state_t g_test_state = {0, 0, 0, 0, 0, 0, NULL, NULL, 1}
+    test_state_t g_test_state = {0, 0, 0, 0, 0, 0, NULL, NULL, 1, 0}
+
+/**
+ * @def TEST_SET_VERBOSE
+ * @brief Enable extra verbose mode (shows each assertion)
+ */
+#define TEST_SET_VERBOSE(level) \
+    do { \
+        g_test_state.extra_verbose = (level); \
+    } while (0)
+
+/**
+ * @def TEST_VERBOSE_PASS
+ * @brief Print verbose pass message if extra_verbose is enabled
+ */
+#define TEST_VERBOSE_PASS(msg) \
+    do { \
+        if (g_test_state.extra_verbose) { \
+            printf("    [PASS] %s\n", (msg)); \
+        } \
+    } while (0)
 
 #endif /* TEST_FRAMEWORK_H */

@@ -15,12 +15,10 @@
 #include "rampart.h"
 
 /* ============================================================================
- * Platform Detection
+ * Platform Detection (POSIX only)
  * ============================================================================ */
 
-#if defined(_WIN32) || defined(_WIN64)
-    #define RP_PLATFORM_WINDOWS 1
-#elif defined(__linux__)
+#if defined(__linux__)
     #define RP_PLATFORM_LINUX 1
 #elif defined(__APPLE__) && defined(__MACH__)
     #define RP_PLATFORM_MACOS 1
@@ -29,19 +27,12 @@
 #endif
 
 /* ============================================================================
- * Platform-Specific Includes
+ * POSIX Threading Types
  * ============================================================================ */
 
-#ifdef RP_PLATFORM_WINDOWS
-    #define WIN32_LEAN_AND_MEAN
-    #include <windows.h>
-    typedef CRITICAL_SECTION rp_mutex_t;
-    typedef DWORD rp_thread_id_t;
-#else
-    #include <pthread.h>
-    typedef pthread_mutex_t rp_mutex_t;
-    typedef pthread_t rp_thread_id_t;
-#endif
+#include <pthread.h>
+typedef pthread_mutex_t rp_mutex_t;
+typedef pthread_t rp_thread_id_t;
 
 /* ============================================================================
  * Internal Constants

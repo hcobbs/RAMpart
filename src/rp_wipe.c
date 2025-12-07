@@ -17,10 +17,7 @@
  */
 
 void rp_wipe_memory_barrier(void) {
-#ifdef RP_PLATFORM_WINDOWS
-    /* Windows memory barrier ensures writes complete */
-    MemoryBarrier();
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
     /* GCC/Clang memory barrier (works even in C89 mode) */
     __asm__ __volatile__("" ::: "memory");
 #else

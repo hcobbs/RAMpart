@@ -23,3 +23,7 @@ Thumbs.db
 # Backup files
 *.bak
 *.orig
+
+# Security PoC binaries (source only)
+test/security/poc_*[!.c]
+test/security/*.dSYM/

@@ -1,6 +1,6 @@
 # RAMpart
 
-A secure memory pool management library written in strict ANSI-C (C89).
+A secure memory pool management library written in strict ANSI-C (C89). Because `malloc` doesn't care if you overflow, but I do.
 
 ## Features
 
@@ -59,4 +59,8 @@ int main(void) {
 
 ## License
 
-TBD
+Copyright (c) 2025 Hunter Cobbs
+
+Licensed under the GNU Lesser General Public License v3.0. See [LICENSE](LICENSE) for details.
+
+It's a library. Link it into your projects without viral licensing headaches. Modify the library itself? Share those changes.

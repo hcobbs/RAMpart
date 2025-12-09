@@ -9,6 +9,10 @@
  * CWE-459: Incomplete Cleanup
  *
  * LOCATION: src/rp_wipe.c:52-67
+ *
+ * STATUS: FIXED - Added random final pass. Wipe now uses 4 passes:
+ *         zeros, ones, alternating, then random data from /dev/urandom.
+ *         This prevents forensic detection based on known patterns.
  */
 
 #include <stdio.h>

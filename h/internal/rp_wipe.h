@@ -9,13 +9,14 @@
  *
  * @section wipe Wipe Strategy
  *
- * The default wipe strategy uses three passes:
+ * The default wipe strategy uses four passes:
  * 1. All zeros (0x00)
  * 2. All ones (0xFF)
  * 3. Alternating pattern (0xAA)
+ * 4. Random data (VULN-021 fix)
  *
- * This pattern provides reasonable protection against casual data
- * recovery while maintaining C89 compliance.
+ * This pattern provides protection against casual data recovery and
+ * forensic detection of wiped memory while maintaining C89 compliance.
  *
  * Copyright (C) 2024 Hunter Cobbs
  *
@@ -44,9 +45,9 @@
 
 /**
  * @def RP_WIPE_PASS_COUNT
- * @brief Number of wipe passes
+ * @brief Number of wipe passes (4 = zeros + ones + alternating + random)
  */
-#define RP_WIPE_PASS_COUNT 3
+#define RP_WIPE_PASS_COUNT 4
 
 /**
  * @def RP_WIPE_PATTERN_1
@@ -65,6 +66,8 @@
  * @brief Third wipe pass pattern (alternating)
  */
 #define RP_WIPE_PATTERN_3 0xAA
+
+/* Pass 4 is random data (VULN-021 fix) */
 
 /* ============================================================================
  * Secure Wipe Functions

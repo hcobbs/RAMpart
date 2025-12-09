@@ -20,7 +20,7 @@ This document tracks security findings, fixes, and release history.
 | VULN-005 | High | FIXED | Thread ownership bypass |
 | VULN-006 | High | FIXED | Free list pointer corruption |
 | VULN-007 | High | OPEN | Use-after-free in coalescing |
-| VULN-008 | High | OPEN | Timing side-channel in guards |
+| VULN-008 | High | FIXED | Timing side-channel in guards |
 | VULN-009 | High | OPEN | Metadata leak from freed blocks |
 | VULN-011 | High | OPEN | Reentrancy via error callback |
 | VULN-012 | Medium | OPEN | Block split size underflow |
@@ -33,7 +33,7 @@ This document tracks security findings, fixes, and release history.
 | VULN-022 | Medium | OPEN | Guard bands not wiped |
 | VULN-023 | Medium | OPEN | Signed config values |
 
-**Summary**: 0 Critical (3 FIXED), 4 High (2 FIXED), 9 Medium (13 remaining)
+**Summary**: 0 Critical (3 FIXED), 3 High (3 FIXED), 9 Medium (12 remaining)
 
 *Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 
@@ -76,7 +76,7 @@ Initial security review identified vulnerabilities. See `docs/SECURITY_AUDIT.md`
 
 ### Phase 2: High Priority
 - [x] VULN-005: Add owner canary before owner_thread
-- [ ] VULN-008: Constant-time guard comparison
+- [x] VULN-008: Constant-time guard comparison
 - [ ] VULN-009: Wipe block headers on free
 - [ ] VULN-011: Add reentrancy protection
 - [x] VULN-006: Safe unlinking with validation

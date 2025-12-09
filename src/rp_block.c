@@ -52,12 +52,17 @@ static void write_guard_pattern(unsigned char *ptr,
 
 /**
  * verify_guard_pattern - Check memory contains expected pattern
+ *
+ * Uses constant-time comparison to prevent timing side-channel attacks
+ * (VULN-008 fix). An attacker cannot determine how many bytes matched
+ * based on execution time.
  */
 static int verify_guard_pattern(const unsigned char *ptr,
                                  size_t size,
                                  unsigned long pattern) {
     size_t i;
     unsigned char bytes[4];
+    unsigned char diff = 0;
 
     /* Extract pattern bytes (big-endian) */
     bytes[0] = (unsigned char)((pattern >> 24) & 0xFF);
@@ -65,14 +70,13 @@ static int verify_guard_pattern(const unsigned char *ptr,
     bytes[2] = (unsigned char)((pattern >> 8) & 0xFF);
     bytes[3] = (unsigned char)(pattern & 0xFF);
 
-    /* Verify pattern */
+    /* Constant-time comparison: always check all bytes */
     for (i = 0; i < size; i++) {
-        if (ptr[i] != bytes[i % 4]) {
-            return 0;  /* Mismatch */
-        }
+        diff |= ptr[i] ^ bytes[i % 4];
     }
 
-    return 1;  /* Match */
+    /* Return 1 if all bytes matched (diff == 0) */
+    return (diff == 0);
 }
 
 /* ============================================================================

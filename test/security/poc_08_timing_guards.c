@@ -12,6 +12,10 @@
  *         via timing analysis.
  *
  * LOCATION: src/rp_block.c:56-76
+ *
+ * STATUS: FIXED - Constant-time comparison implemented using XOR accumulation.
+ *         The verify_guard_pattern function now always processes all bytes
+ *         regardless of mismatches, eliminating timing variation.
  */
 
 #include <stdio.h>

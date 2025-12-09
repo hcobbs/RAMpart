@@ -303,11 +303,15 @@ typedef struct rampart_config_s {
     /**
      * @brief Validate guard bands on free
      *
-     * When set to non-zero, rampart_free() validates guard bands
-     * before freeing. If corruption is detected, the free fails
-     * and the error callback is invoked.
+     * @deprecated This field is retained for API compatibility but is
+     *             now IGNORED. Guard validation on free is always enabled
+     *             as of version 1.0.1 for security reasons (VULN-013 fix).
      *
-     * Default: 1 (enabled)
+     * Previous behavior allowed disabling validation, which could let
+     * corrupted blocks silently enter the free list. This defeats the
+     * purpose of guard bands.
+     *
+     * Default: 1 (always enabled, cannot be disabled)
      */
     int validate_on_free;
 

@@ -26,14 +26,14 @@ This document tracks security findings, fixes, and release history.
 | VULN-012 | Medium | FIXED | Block split size underflow |
 | VULN-013 | Medium | FIXED | Optional guard validation bypass |
 | VULN-015 | Medium | FIXED | Weak memory barrier fallback |
-| VULN-018 | Medium | OPEN | Magic number spoofing |
+| VULN-018 | Medium | MITIGATED | Magic number spoofing |
 | VULN-019 | Medium | OPEN | No pool handle validation |
 | VULN-020 | Medium | OPEN | Leak info uses system malloc |
 | VULN-021 | Medium | OPEN | Predictable wipe patterns |
 | VULN-022 | Medium | OPEN | Guard bands not wiped |
 | VULN-023 | Medium | OPEN | Signed config values |
 
-**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 6 Medium (3 FIXED, 6 remaining)
+**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 5 Medium (3 FIXED, 1 MITIGATED, 5 remaining)
 
 *Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 
@@ -41,6 +41,7 @@ This document tracks security findings, fixes, and release history.
 - **OPEN**: Vulnerability exists, no fix applied
 - **IN PROGRESS**: Fix being developed
 - **FIXED**: Patch applied and verified
+- **MITIGATED**: Risk reduced by other fixes, no direct patch needed
 - **WONTFIX**: Accepted risk with documented rationale
 
 ---

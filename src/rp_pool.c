@@ -27,6 +27,7 @@
 #include "internal/rp_wipe.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 /* ============================================================================
@@ -207,6 +208,37 @@ void rp_pool_remove_from_free_list(rp_pool_header_t *pool,
         return;
     }
 
+    /*
+     * Safe unlinking validation (VULN-006 fix)
+     *
+     * Verify link integrity before modification. If an attacker has
+     * corrupted the prev/next pointers via buffer overflow, continuing
+     * would allow arbitrary write exploitation.
+     *
+     * If corruption is detected, invoke error callback for logging
+     * and then abort to prevent exploitation.
+     */
+    if (block->prev != NULL && block->prev->next != block) {
+        /* Corrupted list: prev->next doesn't point back to us */
+        if (pool->error_callback != NULL) {
+            pool->error_callback((rampart_pool_t *)pool,
+                                  RAMPART_ERR_INTERNAL,
+                                  block,
+                                  pool->callback_user_data);
+        }
+        abort();
+    }
+    if (block->next != NULL && block->next->prev != block) {
+        /* Corrupted list: next->prev doesn't point back to us */
+        if (pool->error_callback != NULL) {
+            pool->error_callback((rampart_pool_t *)pool,
+                                  RAMPART_ERR_INTERNAL,
+                                  block,
+                                  pool->callback_user_data);
+        }
+        abort();
+    }
+
     /* Update previous block's next pointer */
     if (block->prev != NULL) {
         block->prev->next = block->next;
@@ -294,6 +326,29 @@ void rp_pool_remove_from_alloc_list(rp_pool_header_t *pool,
                                      rp_block_header_t *block) {
     if (pool == NULL || block == NULL) {
         return;
+    }
+
+    /*
+     * Safe unlinking validation (VULN-006 fix)
+     * Same protection as free list removal.
+     */
+    if (block->prev != NULL && block->prev->next != block) {
+        if (pool->error_callback != NULL) {
+            pool->error_callback((rampart_pool_t *)pool,
+                                  RAMPART_ERR_INTERNAL,
+                                  block,
+                                  pool->callback_user_data);
+        }
+        abort();
+    }
+    if (block->next != NULL && block->next->prev != block) {
+        if (pool->error_callback != NULL) {
+            pool->error_callback((rampart_pool_t *)pool,
+                                  RAMPART_ERR_INTERNAL,
+                                  block,
+                                  pool->callback_user_data);
+        }
+        abort();
     }
 
     /* Update previous block's next pointer */

@@ -12,6 +12,11 @@
  *         Can be leveraged for code execution.
  *
  * LOCATION: h/internal/rp_types.h:174-191
+ *
+ * STATUS: FIXED - Safe unlinking validation added to list removal functions.
+ *         Before modifying list pointers, link integrity is verified.
+ *         If prev->next != block or next->prev != block, corruption is
+ *         detected and abort() is called to prevent exploitation.
  */
 
 #include <stdio.h>

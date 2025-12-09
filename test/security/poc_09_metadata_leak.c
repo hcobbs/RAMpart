@@ -12,6 +12,11 @@
  *         structure, and program behavior.
  *
  * LOCATION: src/rampart.c:372-373
+ *
+ * STATUS: FIXED - Block header metadata is now cleared on free.
+ *         rp_block_mark_freed() now sets user_size = 0, preventing
+ *         disclosure of original allocation sizes. Combined with
+ *         existing owner_thread clearing, sensitive metadata is wiped.
  */
 
 #include <stdio.h>

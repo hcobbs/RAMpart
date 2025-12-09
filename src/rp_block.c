@@ -343,11 +343,25 @@ void rp_block_mark_freed(rp_block_header_t *block) {
 
 size_t rp_block_calc_total_size(size_t user_size) {
     size_t total;
+    size_t overhead;
+    size_t size_max;
 
-    total = sizeof(rp_block_header_t) +
-            RP_GUARD_SIZE +
-            user_size +
-            RP_GUARD_SIZE;
+    /* C89-safe way to get SIZE_MAX */
+    size_max = (size_t)-1;
+
+    overhead = sizeof(rp_block_header_t) + (RP_GUARD_SIZE * 2);
+
+    /* Check for overflow before adding user_size */
+    if (user_size > size_max - overhead) {
+        return 0;  /* Signal overflow */
+    }
+
+    total = overhead + user_size;
+
+    /* Check for overflow from alignment padding */
+    if (total > size_max - RP_ALIGNMENT) {
+        return 0;  /* Signal overflow */
+    }
 
     /* Align to RP_ALIGNMENT */
     total = RP_ALIGN_UP(total, RP_ALIGNMENT);

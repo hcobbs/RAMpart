@@ -14,7 +14,7 @@ This document tracks security findings, fixes, and release history.
 
 | ID | Severity | Status | Description |
 |----|----------|--------|-------------|
-| VULN-002 | Critical | OPEN | Integer overflow in size calculation |
+| VULN-002 | Critical | FIXED | Integer overflow in size calculation |
 | VULN-003 | Critical | OPEN | Arbitrary pointer dereference |
 | VULN-004 | Critical | OPEN | Predictable guard band patterns |
 | VULN-005 | High | OPEN | Thread ownership bypass |
@@ -70,7 +70,7 @@ Initial security review identified vulnerabilities. See `docs/SECURITY_AUDIT.md`
 ## Remediation Roadmap
 
 ### Phase 1: Critical Fixes (Blocking)
-- [ ] VULN-002: Add overflow checking to size calculations
+- [x] VULN-002: Add overflow checking to size calculations
 - [ ] VULN-003: Validate pointers against pool boundaries
 - [ ] VULN-004: Randomize guard patterns per-pool
 

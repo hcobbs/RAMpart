@@ -384,6 +384,11 @@ rampart_error_t rp_pool_alloc(rp_pool_header_t *pool,
     /* Calculate total block size needed */
     total_size = rp_block_calc_total_size(size);
 
+    /* Check for overflow in size calculation */
+    if (total_size == 0) {
+        return RAMPART_ERR_INVALID_SIZE;
+    }
+
     /* Find best (largest) fitting block */
     block = rp_pool_find_worst_fit(pool, total_size);
 

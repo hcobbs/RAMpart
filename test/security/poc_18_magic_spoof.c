@@ -8,6 +8,12 @@
  * CWE-345: Insufficient Verification of Data Authenticity
  *
  * LOCATION: h/internal/rp_types.h:83-92
+ *
+ * STATUS: MITIGATED - Pool boundary validation (VULN-003 fix) now rejects
+ *         fake blocks outside the pool. Within-pool attacks are mitigated by
+ *         owner canary (VULN-005), safe unlinking (VULN-006), and coalesce
+ *         validation (VULN-007). Randomizing magic numbers per-pool was
+ *         considered but deemed unnecessary given these defenses.
  */
 
 #include <stdio.h>

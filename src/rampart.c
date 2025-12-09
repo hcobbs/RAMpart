@@ -53,6 +53,23 @@ static const char *ERROR_STRINGS[] = {
  * Helper: Invoke Error Callback
  * ============================================================================ */
 
+/**
+ * invoke_callback - Invoke error callback with reentrancy protection
+ *
+ * IMPORTANT (VULN-011 fix): The pool mutex remains LOCKED during callback
+ * invocation to prevent reentrancy attacks. If a callback attempts to call
+ * any RAMpart function on the same pool, it will deadlock.
+ *
+ * Callback implementations MUST NOT call rampart_alloc, rampart_free,
+ * rampart_realloc, rampart_validate, or any other RAMpart function on the
+ * pool that triggered the callback. Violation will cause deadlock.
+ *
+ * Safe callback operations:
+ * - Logging the error
+ * - Setting flags for later handling
+ * - Signaling other threads
+ * - Operations on OTHER pools (not the one that triggered callback)
+ */
 static void invoke_callback(rp_pool_header_t *pool,
                              rampart_error_t error,
                              void *block) {
@@ -67,10 +84,15 @@ static void invoke_callback(rp_pool_header_t *pool,
     user_data = pool->callback_user_data;
 
     if (callback != NULL) {
-        /* Unlock pool before callback to prevent deadlock */
-        rp_pool_unlock(pool);
+        /*
+         * VULN-011 fix: Mutex stays locked during callback.
+         * This prevents reentrancy attacks where malicious callbacks
+         * call rampart_alloc/free to corrupt pool state.
+         *
+         * Consequence: callbacks cannot call RAMpart on this pool
+         * (will deadlock). This is intentional and documented.
+         */
         callback((rampart_pool_t *)pool, error, block, user_data);
-        rp_pool_lock(pool);
     }
 }
 

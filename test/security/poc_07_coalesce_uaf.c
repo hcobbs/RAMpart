@@ -12,6 +12,11 @@
  *         controlled use-after-free.
  *
  * LOCATION: src/rp_pool.c:356-376
+ *
+ * STATUS: FIXED - Coalescing now validates prev_addr and next_addr pointers.
+ *         Before accessing, pointers are checked to be within pool boundaries
+ *         and properly aligned. Corrupted pointers are treated as NULL,
+ *         preventing use-after-free via controlled coalescing.
  */
 
 #include <stdio.h>

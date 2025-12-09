@@ -101,11 +101,16 @@ static void test_wipe_memory_single_alternating(void) {
 }
 
 /**
- * test_wipe_memory_multi_pass - Test 3-pass wipe
+ * test_wipe_memory_multi_pass - Test 4-pass wipe (VULN-021 fix)
+ *
+ * The final pass uses random data, so we verify the original pattern is gone
+ * rather than checking for a specific final pattern.
  */
 static void test_wipe_memory_multi_pass(void) {
     unsigned char buffer[128];
     rampart_error_t err;
+    size_t i;
+    int original_found = 0;
 
     /* Fill with sensitive data pattern */
     memset(buffer, 0xDE, sizeof(buffer));
@@ -114,9 +119,16 @@ static void test_wipe_memory_multi_pass(void) {
     err = rp_wipe_memory(buffer, sizeof(buffer));
     TEST_ASSERT_OK(err);
 
-    /* After 3-pass wipe, final pattern should be RP_WIPE_PATTERN_3 (0xAA) */
-    err = rp_wipe_verify(buffer, sizeof(buffer), RP_WIPE_PATTERN_3);
-    TEST_ASSERT_OK(err);
+    /* After wipe, original data (0xDE) should be overwritten */
+    for (i = 0; i < sizeof(buffer); i++) {
+        if (buffer[i] == 0xDE) {
+            original_found++;
+        }
+    }
+
+    /* With random final pass, statistically we might see 0 or 1 occurrences.
+     * Seeing all 128 bytes as 0xDE would indicate wipe failed. */
+    TEST_ASSERT(original_found < 5);
 }
 
 /**
@@ -167,6 +179,9 @@ static void test_wipe_null_params(void) {
 
 /**
  * test_wipe_various_sizes - Test wipe with various buffer sizes
+ *
+ * The final pass uses random data (VULN-021 fix), so we verify the
+ * original pattern is largely overwritten rather than checking for 0xAA.
  */
 static void test_wipe_various_sizes(void) {
     unsigned char buffer[1024];
@@ -174,6 +189,8 @@ static void test_wipe_various_sizes(void) {
     int num_sizes = (int)(sizeof(sizes) / sizeof(sizes[0]));
     int i;
     rampart_error_t err;
+    size_t j;
+    int original_found;
 
     for (i = 0; i < num_sizes; i++) {
         memset(buffer, 0xCD, sizes[i]);
@@ -181,8 +198,16 @@ static void test_wipe_various_sizes(void) {
         err = rp_wipe_memory(buffer, sizes[i]);
         TEST_ASSERT_OK(err);
 
-        err = rp_wipe_verify(buffer, sizes[i], RP_WIPE_PATTERN_3);
-        TEST_ASSERT_OK(err);
+        /* Count how many original bytes remain */
+        original_found = 0;
+        for (j = 0; j < sizes[i]; j++) {
+            if (buffer[j] == 0xCD) {
+                original_found++;
+            }
+        }
+
+        /* Statistically, very few should match the original pattern */
+        TEST_ASSERT(original_found < 5);
     }
 }
 
@@ -193,8 +218,9 @@ static void test_wipe_various_sizes(void) {
 /**
  * test_freed_memory_wiped - Verify memory is wiped after rampart_free
  *
- * Note: This test relies on implementation details and may be fragile.
- * The purpose is to verify the wipe actually occurs.
+ * Verifies that the original data pattern is largely overwritten.
+ * The final wipe pass uses random data (VULN-021 fix), so we count
+ * how many bytes match the original to verify the wipe occurred.
  */
 static void test_freed_memory_wiped(void) {
     rampart_config_t config;
@@ -202,6 +228,8 @@ static void test_freed_memory_wiped(void) {
     unsigned char *ptr;
     unsigned char *raw_ptr;
     size_t alloc_size = 256;
+    size_t i;
+    int found_original = 0;
 
     rampart_config_default(&config);
     config.pool_size = 64 * 1024;
@@ -224,13 +252,24 @@ static void test_freed_memory_wiped(void) {
 
     /*
      * After free, the memory should be wiped.
-     * The final wipe pattern is 0xAA (RP_WIPE_PATTERN_3).
+     * The final pass is random data (VULN-021 fix), so we count
+     * how many bytes still match the original pattern.
+     *
      * Note: This accesses freed memory which is normally undefined behavior,
      * but in RAMpart the memory is still within the pool.
      */
-    TEST_ASSERT_EQ(0xAA, raw_ptr[0]);
-    TEST_ASSERT_EQ(0xAA, raw_ptr[alloc_size / 2]);
-    TEST_ASSERT_EQ(0xAA, raw_ptr[alloc_size - 1]);
+    for (i = 0; i < alloc_size; i++) {
+        if (raw_ptr[i] == 0xDE) {
+            found_original++;
+        }
+    }
+
+    /*
+     * With random final pass, statistically 256/256 ~= 1 byte might match.
+     * If wipe failed, all 256 bytes would be 0xDE. Allow up to 5 matches
+     * for statistical margin.
+     */
+    TEST_ASSERT(found_original < 5);
 
     rampart_shutdown(pool);
 }

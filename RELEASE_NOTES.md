@@ -29,11 +29,11 @@ This document tracks security findings, fixes, and release history.
 | VULN-018 | Medium | MITIGATED | Magic number spoofing |
 | VULN-019 | Medium | FIXED | No pool handle validation |
 | VULN-020 | Medium | FIXED | Leak info uses system malloc |
-| VULN-021 | Medium | OPEN | Predictable wipe patterns |
+| VULN-021 | Medium | FIXED | Predictable wipe patterns |
 | VULN-022 | Medium | OPEN | Guard bands not wiped |
 | VULN-023 | Medium | OPEN | Signed config values |
 
-**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 3 Medium (5 FIXED, 1 MITIGATED, 3 remaining)
+**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 2 Medium (6 FIXED, 1 MITIGATED, 2 remaining)
 
 *Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 
@@ -85,6 +85,7 @@ Initial security review identified vulnerabilities. See `docs/SECURITY_AUDIT.md`
 ### Phase 3: Hardening
 - [x] VULN-019: Add pool magic validation
 - [x] VULN-020: Secure wipe leak info before free
+- [x] VULN-021: Add random final wipe pass
 - [ ] VULN-023: Normalize boolean config values
 - [ ] Remaining medium-severity issues
 

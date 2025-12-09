@@ -17,7 +17,7 @@ This document tracks security findings, fixes, and release history.
 | VULN-002 | Critical | FIXED | Integer overflow in size calculation |
 | VULN-003 | Critical | FIXED | Arbitrary pointer dereference |
 | VULN-004 | Critical | FIXED | Predictable guard band patterns |
-| VULN-005 | High | OPEN | Thread ownership bypass |
+| VULN-005 | High | FIXED | Thread ownership bypass |
 | VULN-006 | High | OPEN | Free list pointer corruption |
 | VULN-007 | High | OPEN | Use-after-free in coalescing |
 | VULN-008 | High | OPEN | Timing side-channel in guards |
@@ -33,7 +33,7 @@ This document tracks security findings, fixes, and release history.
 | VULN-022 | Medium | OPEN | Guard bands not wiped |
 | VULN-023 | Medium | OPEN | Signed config values |
 
-**Summary**: 0 Critical (3 FIXED), 6 High, 9 Medium (15 remaining)
+**Summary**: 0 Critical (3 FIXED), 5 High (1 FIXED), 9 Medium (14 remaining)
 
 *Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 
@@ -75,6 +75,7 @@ Initial security review identified vulnerabilities. See `docs/SECURITY_AUDIT.md`
 - [x] VULN-004: Randomize guard patterns per-pool
 
 ### Phase 2: High Priority
+- [x] VULN-005: Add owner canary before owner_thread
 - [ ] VULN-008: Constant-time guard comparison
 - [ ] VULN-009: Wipe block headers on free
 - [ ] VULN-011: Add reentrancy protection

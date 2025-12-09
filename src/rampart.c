@@ -269,6 +269,9 @@ void *rampart_alloc(rampart_pool_t *pool, size_t size) {
     /* Initialize guard bands with pool-specific patterns */
     rp_block_init_guards(p, block);
 
+    /* Set owner canary (VULN-005 fix) */
+    rp_block_set_canary(p, block);
+
     /* Zero-initialize user data */
     rp_block_zero_user_data(block);
 
@@ -337,8 +340,16 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
         return RAMPART_ERR_INVALID_BLOCK;
     }
 
-    /* Check thread ownership */
+    /* Verify owner canary before trusting owner_thread (VULN-005 fix) */
     if (p->strict_thread_mode) {
+        err = rp_block_verify_canary(p, block);
+        if (err != RAMPART_OK) {
+            invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+            rp_pool_unlock(p);
+            return RAMPART_ERR_INVALID_BLOCK;
+        }
+
+        /* Check thread ownership */
         err = rp_thread_verify_owner(block);
         if (err != RAMPART_OK) {
             invoke_callback(p, RAMPART_ERR_WRONG_THREAD, ptr);

@@ -368,7 +368,49 @@ void rp_block_mark_freed(rp_block_header_t *block) {
 
     block->magic = RP_BLOCK_FREED_MAGIC;
     block->flags &= ~(unsigned int)RP_FLAG_ALLOCATED;
+    block->owner_canary = 0;  /* Clear canary on free */
     block->owner_thread = zero_thread;
+}
+
+/* ============================================================================
+ * Owner Canary Functions (VULN-005 fix)
+ * ============================================================================ */
+
+unsigned long rp_block_compute_canary(const rp_pool_header_t *pool,
+                                       const rp_block_header_t *block) {
+    /*
+     * Compute canary as XOR of pool pattern and block address.
+     * This makes the canary:
+     * - Unpredictable (requires knowing pool's random pattern)
+     * - Unique per block (includes block address)
+     * - Efficiently verifiable
+     */
+    return pool->guard_front_pattern ^ (unsigned long)(size_t)block;
+}
+
+void rp_block_set_canary(rp_pool_header_t *pool, rp_block_header_t *block) {
+    if (pool == NULL || block == NULL) {
+        return;
+    }
+
+    block->owner_canary = rp_block_compute_canary(pool, block);
+}
+
+rampart_error_t rp_block_verify_canary(const rp_pool_header_t *pool,
+                                        const rp_block_header_t *block) {
+    unsigned long expected;
+
+    if (pool == NULL || block == NULL) {
+        return RAMPART_ERR_NULL_PARAM;
+    }
+
+    expected = rp_block_compute_canary(pool, block);
+
+    if (block->owner_canary != expected) {
+        return RAMPART_ERR_INVALID_BLOCK;  /* Canary corrupted */
+    }
+
+    return RAMPART_OK;
 }
 
 /* ============================================================================

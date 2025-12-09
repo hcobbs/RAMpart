@@ -9,6 +9,10 @@
  * CWE-20: Improper Input Validation
  *
  * LOCATION: h/rampart.h:308,342,353
+ *
+ * STATUS: FIXED - Boolean config values are normalized to 0 or 1 in
+ *         rp_pool_init(). Any non-zero value becomes 1, zero stays 0.
+ *         This prevents semantic confusion from negative values.
  */
 
 #include <stdio.h>

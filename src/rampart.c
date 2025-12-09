@@ -313,9 +313,16 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
     }
 
     p = (rp_pool_header_t *)pool;
-    block = rp_block_from_user_ptr(ptr);
 
     rp_pool_lock(p);
+
+    /* Get block header with bounds validation */
+    block = rp_block_from_user_ptr_safe(p, ptr);
+    if (block == NULL) {
+        invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
 
     /* Validate block */
     err = rp_block_validate_magic(block);
@@ -375,9 +382,15 @@ rampart_error_t rampart_validate(rampart_pool_t *pool, void *ptr) {
     }
 
     p = (rp_pool_header_t *)pool;
-    block = rp_block_from_user_ptr(ptr);
 
     rp_pool_lock(p);
+
+    /* Get block header with bounds validation */
+    block = rp_block_from_user_ptr_safe(p, ptr);
+    if (block == NULL) {
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
 
     err = rp_block_validate(block);
 
@@ -467,9 +480,15 @@ rampart_error_t rampart_get_block_info(rampart_pool_t *pool,
     memset(info, 0, sizeof(rampart_block_info_t));
 
     p = (rp_pool_header_t *)pool;
-    block = rp_block_from_user_ptr(ptr);
 
     rp_pool_lock(p);
+
+    /* Get block header with bounds validation */
+    block = rp_block_from_user_ptr_safe(p, ptr);
+    if (block == NULL) {
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
 
     err = rp_block_validate_magic(block);
     if (err != RAMPART_OK) {

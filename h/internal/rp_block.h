@@ -211,6 +211,23 @@ void *rp_block_get_user_ptr(rp_block_header_t *block);
  */
 rp_block_header_t *rp_block_from_user_ptr(void *ptr);
 
+/**
+ * rp_block_from_user_ptr_safe - Get block header with bounds validation
+ *
+ * Given a pointer returned by rampart_alloc(), validates that it falls
+ * within the pool boundaries and is properly aligned before returning
+ * the corresponding block header.
+ *
+ * @param pool      Pointer to pool header (for bounds checking)
+ * @param ptr       User data pointer
+ *
+ * @return Pointer to block header if valid, NULL if outside pool or misaligned
+ *
+ * @note This is the safe version that should be used for external pointers.
+ */
+rp_block_header_t *rp_block_from_user_ptr_safe(rp_pool_header_t *pool,
+                                                void *ptr);
+
 /* ============================================================================
  * Block State Functions
  * ============================================================================ */

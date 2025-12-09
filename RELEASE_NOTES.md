@@ -14,7 +14,6 @@ This document tracks security findings, fixes, and release history.
 
 | ID | Severity | Status | Description |
 |----|----------|--------|-------------|
-| VULN-001 | Critical | OPEN | Non-functional encryption |
 | VULN-002 | Critical | OPEN | Integer overflow in size calculation |
 | VULN-003 | Critical | OPEN | Arbitrary pointer dereference |
 | VULN-004 | Critical | OPEN | Predictable guard band patterns |
@@ -23,14 +22,10 @@ This document tracks security findings, fixes, and release history.
 | VULN-007 | High | OPEN | Use-after-free in coalescing |
 | VULN-008 | High | OPEN | Timing side-channel in guards |
 | VULN-009 | High | OPEN | Metadata leak from freed blocks |
-| VULN-010 | High | OPEN | ECB mode pattern exposure |
 | VULN-011 | High | OPEN | Reentrancy via error callback |
 | VULN-012 | Medium | OPEN | Block split size underflow |
 | VULN-013 | Medium | OPEN | Optional guard validation bypass |
-| VULN-014 | Medium | OPEN | Silent key truncation |
 | VULN-015 | Medium | OPEN | Weak memory barrier fallback |
-| VULN-016 | Medium | OPEN | S-box cache timing |
-| VULN-017 | Medium | OPEN | CTR counter overflow |
 | VULN-018 | Medium | OPEN | Magic number spoofing |
 | VULN-019 | Medium | OPEN | No pool handle validation |
 | VULN-020 | Medium | OPEN | Leak info uses system malloc |
@@ -38,7 +33,9 @@ This document tracks security findings, fixes, and release history.
 | VULN-022 | Medium | OPEN | Guard bands not wiped |
 | VULN-023 | Medium | OPEN | Signed config values |
 
-**Summary**: 4 Critical, 7 High, 12 Medium (23 total)
+**Summary**: 3 Critical, 6 High, 9 Medium (18 total)
+
+*Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 
 ### Status Legend
 - **OPEN**: Vulnerability exists, no fix applied
@@ -54,17 +51,19 @@ This document tracks security findings, fixes, and release history.
 
 **Security Audit Completed**: 2024-12-08
 
-Initial security review identified 23 vulnerabilities. See `docs/SECURITY_AUDIT.md` for full details and `docs/REMEDIATION.md` for recommended fixes.
+Initial security review identified vulnerabilities. See `docs/SECURITY_AUDIT.md` for full details and `docs/REMEDIATION.md` for recommended fixes.
 
 **Known Issues**:
-- Encryption-at-rest feature is NOT functional (VULN-001)
 - Guard band detection can be bypassed with known patterns (VULN-004)
 - Library should not be used for security-critical applications until Critical issues resolved
+
+**Changes**:
+- Removed non-functional encryption feature (was never implemented correctly)
 
 **Files Added**:
 - `docs/SECURITY_AUDIT.md` - Full vulnerability report
 - `docs/REMEDIATION.md` - Specific code patches
-- `test/security/` - 23 proof-of-concept exploits
+- `test/security/` - 18 proof-of-concept exploits
 
 ---
 
@@ -74,7 +73,6 @@ Initial security review identified 23 vulnerabilities. See `docs/SECURITY_AUDIT.
 - [ ] VULN-002: Add overflow checking to size calculations
 - [ ] VULN-003: Validate pointers against pool boundaries
 - [ ] VULN-004: Randomize guard patterns per-pool
-- [ ] VULN-001: Document encryption limitation / reject config
 
 ### Phase 2: High Priority
 - [ ] VULN-008: Constant-time guard comparison
@@ -84,7 +82,6 @@ Initial security review identified 23 vulnerabilities. See `docs/SECURITY_AUDIT.
 
 ### Phase 3: Hardening
 - [ ] VULN-019: Add pool magic validation
-- [ ] VULN-014: Reject oversized keys
 - [ ] VULN-023: Normalize boolean config values
 - [ ] Remaining medium-severity issues
 

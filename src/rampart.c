@@ -146,9 +146,6 @@ rampart_error_t rampart_config_default(rampart_config_t *config) {
     memset(config, 0, sizeof(rampart_config_t));
 
     config->pool_size = 0;
-    config->encryption_enabled = 0;
-    config->encryption_key = NULL;
-    config->encryption_key_size = 0;
     config->strict_thread_mode = 1;
     config->validate_on_free = 1;
     config->error_callback = NULL;
@@ -174,15 +171,6 @@ rampart_pool_t *rampart_init(const rampart_config_t *config) {
     if (config->pool_size < RAMPART_MIN_POOL_SIZE) {
         rp_thread_set_last_error(RAMPART_ERR_INVALID_CONFIG);
         return NULL;
-    }
-
-    if (config->encryption_enabled) {
-        if (config->encryption_key == NULL ||
-            config->encryption_key_size == 0 ||
-            config->encryption_key_size > RAMPART_MAX_KEY_SIZE) {
-            rp_thread_set_last_error(RAMPART_ERR_INVALID_CONFIG);
-            return NULL;
-        }
     }
 
     /* Allocate pool memory from system */
@@ -287,13 +275,6 @@ void *rampart_alloc(rampart_pool_t *pool, size_t size) {
     user_ptr = rp_block_get_user_ptr(block);
 
     rp_pool_unlock(p);
-
-    /*
-     * Note: Encryption-at-rest is not applied here. Raw pointer access
-     * bypasses encryption. For encryption to work, accessor functions
-     * (rampart_read/rampart_write) must be used. Those functions are
-     * not yet implemented. The encryption key is stored for future use.
-     */
 
     return user_ptr;
 }
@@ -499,7 +480,6 @@ rampart_error_t rampart_get_block_info(rampart_pool_t *pool,
     info->user_size = block->user_size;
     info->total_size = block->total_size;
     info->owner_thread = rp_thread_id_to_ulong(block->owner_thread);
-    info->is_encrypted = rp_block_is_encrypted(block);
     info->front_guard_valid =
         (rp_block_validate_front_guard(block) == RAMPART_OK);
     info->rear_guard_valid =

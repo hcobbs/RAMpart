@@ -6,7 +6,6 @@ A secure memory pool management library written in strict ANSI-C (C89). Because 
 
 - **Guard Bands**: Detect buffer overflows and underflows
 - **Thread Ownership**: Enforce thread-based memory access control
-- **Encryption at Rest**: Optional Feistel cipher encryption of pool data
 - **Secure Wiping**: Multi-pass overwrite of freed memory
 - **Worst-Fit Allocation**: Predictable fragmentation behavior
 - **Leak Detection**: Track all allocations, report leaks on shutdown

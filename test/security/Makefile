@@ -13,9 +13,8 @@ LDFLAGS = -L../../lib -lrampart -lpthread
 # Library path for runtime
 LIBRARY_PATH = ../../lib
 
-# All PoC targets
-POCS = poc_01_fake_encryption \
-       poc_02_integer_overflow \
+# All PoC targets (encryption PoCs removed - feature was deleted)
+POCS = poc_02_integer_overflow \
        poc_03_arbitrary_read \
        poc_04_guard_bypass \
        poc_05_thread_bypass \
@@ -23,14 +22,10 @@ POCS = poc_01_fake_encryption \
        poc_07_coalesce_uaf \
        poc_08_timing_guards \
        poc_09_metadata_leak \
-       poc_10_ecb_patterns \
        poc_11_reentrancy \
        poc_12_split_underflow \
        poc_13_validation_bypass \
-       poc_14_key_truncation \
        poc_15_barrier_fallback \
-       poc_16_sbox_timing \
-       poc_17_counter_overflow \
        poc_18_magic_spoof \
        poc_19_pool_validation \
        poc_20_leak_malloc \
@@ -66,7 +61,7 @@ run: all
 	@echo "PoC Suite Complete"
 	@echo "============================================"
 
-# Run a single PoC (usage: make run-poc_01_fake_encryption)
+# Run a single PoC (usage: make run-poc_02_integer_overflow)
 run-%: %
 	@echo "Running $<..."
 	@LD_LIBRARY_PATH=$(LIBRARY_PATH) DYLD_LIBRARY_PATH=$(LIBRARY_PATH) ./$<

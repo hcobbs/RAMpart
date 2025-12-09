@@ -39,7 +39,6 @@ DEFINE_TEST_STATE();
 /* Test suites defined in separate files */
 extern void run_pool_tests(void);
 extern void run_block_tests(void);
-extern void run_crypto_tests(void);
 extern void run_wipe_tests(void);
 extern void run_guard_tests(void);
 extern void run_thread_tests(void);
@@ -125,9 +124,6 @@ static void test_config_default(void) {
 
     /* Verify defaults */
     TEST_ASSERT_EQ(0, config.pool_size);
-    TEST_ASSERT_EQ(0, config.encryption_enabled);
-    TEST_ASSERT_NULL(config.encryption_key);
-    TEST_ASSERT_EQ(0, config.encryption_key_size);
     TEST_ASSERT_EQ(1, config.strict_thread_mode);
     TEST_ASSERT_EQ(1, config.validate_on_free);
     TEST_ASSERT_NULL(config.error_callback);
@@ -1054,8 +1050,6 @@ int main(int argc, char *argv[]) {
     TEST_SUITE_END();
 
     /* External Test Suites */
-    run_crypto_tests();
-
     run_wipe_tests();
 
     run_guard_tests();

@@ -5,7 +5,6 @@
  * RAMpart is a secure memory pool management library providing:
  * - Guard bands for buffer overflow/underflow detection
  * - Thread ownership enforcement
- * - Optional encryption of data at rest
  * - Secure wiping of freed memory
  * - Worst-fit allocation strategy
  * - Memory leak detection and prevention
@@ -98,15 +97,6 @@ extern "C" {
 /* ============================================================================
  * Configuration Constants
  * ============================================================================ */
-
-/**
- * @def RAMPART_MAX_KEY_SIZE
- * @brief Maximum encryption key size in bytes
- *
- * The Feistel cipher implementation supports keys up to this size.
- * Recommended key size is 16 bytes (128 bits).
- */
-#define RAMPART_MAX_KEY_SIZE 32
 
 /**
  * @def RAMPART_MIN_POOL_SIZE
@@ -280,7 +270,6 @@ typedef void (*rampart_error_callback_t)(
  * rampart_config_t config;
  * rampart_config_default(&config);
  * config.pool_size = 10 * 1024 * 1024;
- * config.encryption_enabled = 1;
  * @endcode
  */
 typedef struct rampart_config_s {
@@ -295,40 +284,6 @@ typedef struct rampart_config_s {
      *       pool_size - 512 bytes - (96 bytes per allocation).
      */
     size_t pool_size;
-
-    /**
-     * @brief Enable encryption of data at rest
-     *
-     * When set to non-zero, user data in allocated blocks is encrypted
-     * using the configured encryption key. Data is decrypted when
-     * accessed through RAMpart accessor functions.
-     *
-     * Default: 0 (disabled)
-     */
-    int encryption_enabled;
-
-    /**
-     * @brief Encryption key data
-     *
-     * Pointer to the encryption key. Must be non-NULL if
-     * encryption_enabled is set. The key is copied during
-     * rampart_init(); the original may be freed afterward.
-     *
-     * Recommended key size: 16 bytes (128 bits).
-     *
-     * Default: NULL
-     */
-    const unsigned char *encryption_key;
-
-    /**
-     * @brief Encryption key size in bytes
-     *
-     * Must be between 1 and RAMPART_MAX_KEY_SIZE if encryption
-     * is enabled. Recommended: 16 bytes.
-     *
-     * Default: 0
-     */
-    size_t encryption_key_size;
 
     /**
      * @brief Enforce thread ownership
@@ -470,11 +425,6 @@ typedef struct rampart_block_info_s {
     unsigned long owner_thread;
 
     /**
-     * @brief Non-zero if block data is encrypted
-     */
-    int is_encrypted;
-
-    /**
      * @brief Non-zero if front guard band is intact
      */
     int front_guard_valid;
@@ -568,9 +518,6 @@ typedef struct rampart_validation_result_s {
  *
  * Default values:
  * - pool_size: 0 (must be set before calling rampart_init)
- * - encryption_enabled: 0 (disabled)
- * - encryption_key: NULL
- * - encryption_key_size: 0
  * - strict_thread_mode: 1 (enabled)
  * - validate_on_free: 1 (enabled)
  * - error_callback: NULL
@@ -650,9 +597,6 @@ rampart_shutdown_result_t rampart_shutdown(rampart_pool_t *pool);
  *
  * Uses worst-fit allocation: selects the largest available free block
  * and splits off the remainder.
- *
- * If encryption is enabled in the pool configuration, data written to
- * the block will be encrypted at rest.
  *
  * @param pool      Pointer to an initialized pool
  * @param size      Number of bytes to allocate (must be > 0)

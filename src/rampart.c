@@ -611,7 +611,18 @@ rampart_error_t rampart_get_block_info(rampart_pool_t *pool,
 
 /* ============================================================================
  * Leak Information Functions
- * ============================================================================ */
+ * ============================================================================
+ *
+ * VULN-020 fix: Leak info array now includes a hidden size header so that
+ * rampart_free_leak_info() can securely wipe the sensitive data before freeing.
+ * This prevents address, size, and thread ID information from persisting in
+ * unprotected system heap memory.
+ *
+ * Memory layout:
+ *   [size_t count][leak_info_t[0]][leak_info_t[1]]...
+ *   ^              ^
+ *   base           returned pointer
+ */
 
 rampart_error_t rampart_get_leaks(rampart_pool_t *pool,
                                    rampart_leak_info_t **leaks,
@@ -619,6 +630,8 @@ rampart_error_t rampart_get_leaks(rampart_pool_t *pool,
     rp_pool_header_t *p;
     rp_block_header_t *current;
     rampart_leak_info_t *leak_array;
+    unsigned char *base;
+    size_t alloc_size;
     size_t count;
     size_t i;
 
@@ -646,14 +659,23 @@ rampart_error_t rampart_get_leaks(rampart_pool_t *pool,
         return RAMPART_OK;
     }
 
-    /* Allocate array */
-    leak_array = (rampart_leak_info_t *)malloc(
-        count * sizeof(rampart_leak_info_t));
+    /*
+     * VULN-020 fix: Allocate with hidden header to store count.
+     * This allows rampart_free_leak_info() to wipe the data before freeing.
+     */
+    alloc_size = sizeof(size_t) + (count * sizeof(rampart_leak_info_t));
+    base = (unsigned char *)malloc(alloc_size);
 
-    if (leak_array == NULL) {
+    if (base == NULL) {
         rp_pool_unlock(p);
         return RAMPART_ERR_OUT_OF_MEMORY;
     }
+
+    /* Store count in header */
+    *((size_t *)base) = count;
+
+    /* Leak array follows the count header */
+    leak_array = (rampart_leak_info_t *)(base + sizeof(size_t));
 
     /* Fill array */
     i = 0;
@@ -675,7 +697,25 @@ rampart_error_t rampart_get_leaks(rampart_pool_t *pool,
 }
 
 void rampart_free_leak_info(rampart_leak_info_t *leaks) {
-    if (leaks != NULL) {
-        free(leaks);
+    unsigned char *base;
+    size_t count;
+    size_t total_size;
+
+    if (leaks == NULL) {
+        return;
     }
+
+    /*
+     * VULN-020 fix: Recover count from hidden header and wipe before freeing.
+     * This prevents sensitive info (addresses, sizes, thread IDs) from
+     * persisting in unprotected system heap memory.
+     */
+    base = (unsigned char *)leaks - sizeof(size_t);
+    count = *((size_t *)base);
+    total_size = sizeof(size_t) + (count * sizeof(rampart_leak_info_t));
+
+    /* Securely wipe the entire allocation */
+    rp_wipe_memory(base, total_size);
+
+    free(base);
 }

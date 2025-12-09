@@ -11,6 +11,11 @@
  * IMPACT: Heap corruption, denial of service, potential code execution.
  *
  * LOCATION: src/rampart.c:56-75
+ *
+ * STATUS: FIXED - Pool mutex now remains locked during callback invocation.
+ *         Reentrant calls from callbacks will deadlock instead of corrupting
+ *         state. Documentation updated to warn that callbacks must not call
+ *         RAMpart functions on the same pool.
  */
 
 #include <stdio.h>

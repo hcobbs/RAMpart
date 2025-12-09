@@ -236,16 +236,20 @@ typedef struct rampart_pool_s rampart_pool_t;
  * @brief Callback function for error notification
  *
  * Called when security-relevant errors occur, such as guard band
- * corruption or cross-thread access attempts. The callback is invoked
- * with the pool mutex released to prevent deadlocks.
+ * corruption or cross-thread access attempts.
  *
  * @param pool      The pool where the error occurred
  * @param error     The error code
  * @param block     Pointer to the affected block (may be NULL)
  * @param user_data User-provided context pointer
  *
- * @note Callbacks must not call RAMpart functions on the same pool
- *       to avoid potential reentrancy issues.
+ * @warning REENTRANCY RESTRICTION: The callback is invoked with the pool
+ *          mutex HELD. Callbacks MUST NOT call any RAMpart function
+ *          (rampart_alloc, rampart_free, rampart_realloc, rampart_validate,
+ *          etc.) on the same pool. Doing so will cause deadlock.
+ *
+ * @note Safe operations in callbacks: logging, setting flags, signaling
+ *       threads, or operations on OTHER pools (not the triggering pool).
  */
 typedef void (*rampart_error_callback_t)(
     rampart_pool_t *pool,

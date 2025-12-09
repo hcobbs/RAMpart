@@ -382,12 +382,25 @@ void rp_pool_split_block(rp_pool_header_t *pool,
         return;
     }
 
-    /* Check if remainder is large enough */
-    if (block->total_size < needed_size + RP_MIN_BLOCK_SIZE) {
-        return;  /* Not enough space to split */
+    /*
+     * Check if remainder is large enough (VULN-012 fix).
+     *
+     * Split into two checks to avoid integer overflow:
+     * 1. First ensure total_size >= needed_size (prevents underflow)
+     * 2. Then check if remainder would be large enough
+     *
+     * Previous code: if (total_size < needed_size + RP_MIN_BLOCK_SIZE)
+     * was vulnerable to overflow if needed_size was near SIZE_MAX.
+     */
+    if (block->total_size < needed_size) {
+        return;  /* Underflow would occur */
     }
 
     remainder_size = block->total_size - needed_size;
+
+    if (remainder_size < RP_MIN_BLOCK_SIZE) {
+        return;  /* Not enough space to split */
+    }
 
     /* Create remainder block */
     remainder = (rp_block_header_t *)((unsigned char *)block + needed_size);

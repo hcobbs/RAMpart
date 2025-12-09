@@ -92,6 +92,15 @@ typedef pthread_t rp_thread_id_t;
 #define RP_BLOCK_FREED_MAGIC 0xF4EED000UL
 
 /**
+ * @def RP_POOL_MAGIC
+ * @brief Magic number for pool validation (0x504F4F4C = "POOL")
+ *
+ * Used to verify that a pool handle is actually a valid RAMpart pool
+ * before accessing any pool fields (VULN-019 fix).
+ */
+#define RP_POOL_MAGIC 0x504F4F4CUL
+
+/**
  * @def RP_MIN_BLOCK_SIZE
  * @brief Minimum block size after splitting
  *
@@ -198,6 +207,15 @@ typedef struct rp_block_header_s {
  * configuration, state, and the free list head.
  */
 typedef struct rp_pool_header_s {
+    /**
+     * @brief Magic number for pool validation (VULN-019 fix)
+     *
+     * Must be RP_POOL_MAGIC for valid pools. Checked by all public API
+     * functions before accessing any other pool fields. Set on init,
+     * cleared on destroy.
+     */
+    unsigned long pool_magic;
+
     /**
      * @brief Total pool size in bytes
      */

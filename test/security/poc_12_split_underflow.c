@@ -9,6 +9,10 @@
  * CWE-191: Integer Underflow
  *
  * LOCATION: src/rp_pool.c:305-308
+ *
+ * STATUS: FIXED - Split check now uses two-step validation to prevent
+ *         integer overflow. First checks total_size >= needed_size,
+ *         then checks if remainder is large enough separately.
  */
 
 #include <stdio.h>

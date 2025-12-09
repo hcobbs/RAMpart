@@ -27,6 +27,7 @@
 #include "rampart.h"
 #include "internal/rp_block.h"
 #include "internal/rp_types.h"
+#include "internal/rp_pool.h"
 
 /* External test state from test_main.c */
 extern test_state_t g_test_state;
@@ -40,20 +41,27 @@ void run_guard_tests(void);
 
 /**
  * test_front_guard_pattern - Verify front guard is correctly initialized
+ *
+ * Note: With VULN-004 fix, patterns are randomized per-pool, so we verify
+ * that the guard matches the pool's pattern rather than a fixed value.
  */
 static void test_front_guard_pattern(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
+    rp_pool_header_t *p;
     unsigned char *ptr;
     unsigned char *front_guard;
     rp_block_header_t *block;
     rampart_error_t err;
+    unsigned char expected[4];
 
     rampart_config_default(&config);
     config.pool_size = 64 * 1024;
 
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
+
+    p = (rp_pool_header_t *)pool;
 
     ptr = (unsigned char *)rampart_alloc(pool, 128);
     TEST_ASSERT_NOT_NULL(ptr);
@@ -62,14 +70,19 @@ static void test_front_guard_pattern(void) {
     block = RP_USER_TO_BLOCK(ptr);
     front_guard = RP_FRONT_GUARD(block);
 
-    /* Verify front guard pattern (0xDEADBEEF repeated) */
-    TEST_ASSERT_EQ(0xDE, front_guard[0]);
-    TEST_ASSERT_EQ(0xAD, front_guard[1]);
-    TEST_ASSERT_EQ(0xBE, front_guard[2]);
-    TEST_ASSERT_EQ(0xEF, front_guard[3]);
+    /* Verify front guard matches pool's randomized pattern */
+    expected[0] = (unsigned char)((p->guard_front_pattern >> 24) & 0xFF);
+    expected[1] = (unsigned char)((p->guard_front_pattern >> 16) & 0xFF);
+    expected[2] = (unsigned char)((p->guard_front_pattern >> 8) & 0xFF);
+    expected[3] = (unsigned char)(p->guard_front_pattern & 0xFF);
+
+    TEST_ASSERT_EQ(expected[0], front_guard[0]);
+    TEST_ASSERT_EQ(expected[1], front_guard[1]);
+    TEST_ASSERT_EQ(expected[2], front_guard[2]);
+    TEST_ASSERT_EQ(expected[3], front_guard[3]);
 
     /* Validate via function */
-    err = rp_block_validate_front_guard(block);
+    err = rp_block_validate_front_guard(p, block);
     TEST_ASSERT_OK(err);
 
     rampart_free(pool, ptr);
@@ -78,20 +91,27 @@ static void test_front_guard_pattern(void) {
 
 /**
  * test_rear_guard_pattern - Verify rear guard is correctly initialized
+ *
+ * Note: With VULN-004 fix, patterns are randomized per-pool, so we verify
+ * that the guard matches the pool's pattern rather than a fixed value.
  */
 static void test_rear_guard_pattern(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
+    rp_pool_header_t *p;
     unsigned char *ptr;
     unsigned char *rear_guard;
     rp_block_header_t *block;
     rampart_error_t err;
+    unsigned char expected[4];
 
     rampart_config_default(&config);
     config.pool_size = 64 * 1024;
 
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
+
+    p = (rp_pool_header_t *)pool;
 
     ptr = (unsigned char *)rampart_alloc(pool, 128);
     TEST_ASSERT_NOT_NULL(ptr);
@@ -100,14 +120,19 @@ static void test_rear_guard_pattern(void) {
     block = RP_USER_TO_BLOCK(ptr);
     rear_guard = RP_REAR_GUARD(block);
 
-    /* Verify rear guard pattern (0xFEEDFACE repeated) */
-    TEST_ASSERT_EQ(0xFE, rear_guard[0]);
-    TEST_ASSERT_EQ(0xED, rear_guard[1]);
-    TEST_ASSERT_EQ(0xFA, rear_guard[2]);
-    TEST_ASSERT_EQ(0xCE, rear_guard[3]);
+    /* Verify rear guard matches pool's randomized pattern */
+    expected[0] = (unsigned char)((p->guard_rear_pattern >> 24) & 0xFF);
+    expected[1] = (unsigned char)((p->guard_rear_pattern >> 16) & 0xFF);
+    expected[2] = (unsigned char)((p->guard_rear_pattern >> 8) & 0xFF);
+    expected[3] = (unsigned char)(p->guard_rear_pattern & 0xFF);
+
+    TEST_ASSERT_EQ(expected[0], rear_guard[0]);
+    TEST_ASSERT_EQ(expected[1], rear_guard[1]);
+    TEST_ASSERT_EQ(expected[2], rear_guard[2]);
+    TEST_ASSERT_EQ(expected[3], rear_guard[3]);
 
     /* Validate via function */
-    err = rp_block_validate_rear_guard(block);
+    err = rp_block_validate_rear_guard(p, block);
     TEST_ASSERT_OK(err);
 
     rampart_free(pool, ptr);
@@ -124,6 +149,7 @@ static void test_rear_guard_pattern(void) {
 static void test_front_guard_corruption_detected(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
+    rp_pool_header_t *p;
     unsigned char *ptr;
     unsigned char *front_guard;
     rp_block_header_t *block;
@@ -136,6 +162,8 @@ static void test_front_guard_corruption_detected(void) {
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
 
+    p = (rp_pool_header_t *)pool;
+
     ptr = (unsigned char *)rampart_alloc(pool, 128);
     TEST_ASSERT_NOT_NULL(ptr);
 
@@ -146,7 +174,7 @@ static void test_front_guard_corruption_detected(void) {
     front_guard[0] = 0x00;
 
     /* Validation should fail */
-    err = rp_block_validate_front_guard(block);
+    err = rp_block_validate_front_guard(p, block);
     TEST_ASSERT_ERR(RAMPART_ERR_GUARD_CORRUPTED, err);
 
     /* Free should detect corruption */
@@ -163,6 +191,7 @@ static void test_front_guard_corruption_detected(void) {
 static void test_rear_guard_corruption_detected(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
+    rp_pool_header_t *p;
     unsigned char *ptr;
     unsigned char *rear_guard;
     rp_block_header_t *block;
@@ -175,6 +204,8 @@ static void test_rear_guard_corruption_detected(void) {
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
 
+    p = (rp_pool_header_t *)pool;
+
     ptr = (unsigned char *)rampart_alloc(pool, 128);
     TEST_ASSERT_NOT_NULL(ptr);
 
@@ -185,7 +216,7 @@ static void test_rear_guard_corruption_detected(void) {
     rear_guard[RP_GUARD_SIZE - 1] = 0xFF;
 
     /* Validation should fail */
-    err = rp_block_validate_rear_guard(block);
+    err = rp_block_validate_rear_guard(p, block);
     TEST_ASSERT_ERR(RAMPART_ERR_GUARD_CORRUPTED, err);
 
     /* Free should detect corruption */
@@ -261,6 +292,7 @@ static void test_buffer_underflow_detected(void) {
 static void test_partial_guard_corruption(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
+    rp_pool_header_t *p;
     unsigned char *ptr;
     unsigned char *front_guard;
     rp_block_header_t *block;
@@ -272,6 +304,8 @@ static void test_partial_guard_corruption(void) {
 
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
+
+    p = (rp_pool_header_t *)pool;
 
     /* Test corruption at each position in front guard */
     for (i = 0; i < (int)RP_GUARD_SIZE; i++) {
@@ -285,7 +319,7 @@ static void test_partial_guard_corruption(void) {
         front_guard[i] ^= 0xFF;
 
         /* Should be detected */
-        err = rp_block_validate_front_guard(block);
+        err = rp_block_validate_front_guard(p, block);
         TEST_ASSERT_ERR(RAMPART_ERR_GUARD_CORRUPTED, err);
 
         /* Restore for clean free (avoid cascading failures) */
@@ -331,6 +365,7 @@ static void test_validate_on_free_disabled(void) {
 static void test_guard_sizes_various_allocs(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
+    rp_pool_header_t *p;
     unsigned char *ptr;
     rp_block_header_t *block;
     rampart_error_t err;
@@ -344,6 +379,8 @@ static void test_guard_sizes_various_allocs(void) {
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
 
+    p = (rp_pool_header_t *)pool;
+
     for (i = 0; i < num_sizes; i++) {
         ptr = (unsigned char *)rampart_alloc(pool, sizes[i]);
         TEST_ASSERT_NOT_NULL(ptr);
@@ -351,7 +388,7 @@ static void test_guard_sizes_various_allocs(void) {
         block = RP_USER_TO_BLOCK(ptr);
 
         /* Both guards should be valid */
-        err = rp_block_validate_guards(block);
+        err = rp_block_validate_guards(p, block);
         TEST_ASSERT_OK(err);
 
         rampart_free(pool, ptr);

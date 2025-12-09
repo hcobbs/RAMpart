@@ -266,8 +266,8 @@ void *rampart_alloc(rampart_pool_t *pool, size_t size) {
         return NULL;
     }
 
-    /* Initialize guard bands */
-    rp_block_init_guards(block);
+    /* Initialize guard bands with pool-specific patterns */
+    rp_block_init_guards(p, block);
 
     /* Zero-initialize user data */
     rp_block_zero_user_data(block);
@@ -349,7 +349,7 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
 
     /* Validate guard bands if configured */
     if (p->validate_on_free) {
-        err = rp_block_validate_guards(block);
+        err = rp_block_validate_guards(p, block);
         if (err != RAMPART_OK) {
             invoke_callback(p, RAMPART_ERR_GUARD_CORRUPTED, ptr);
             rp_pool_unlock(p);
@@ -392,7 +392,7 @@ rampart_error_t rampart_validate(rampart_pool_t *pool, void *ptr) {
         return RAMPART_ERR_INVALID_BLOCK;
     }
 
-    err = rp_block_validate(block);
+    err = rp_block_validate(p, block);
 
     rp_pool_unlock(p);
 
@@ -419,7 +419,7 @@ rampart_error_t rampart_validate_pool(rampart_pool_t *pool,
     while (current != NULL) {
         result->checked_count++;
 
-        err = rp_block_validate_guards(current);
+        err = rp_block_validate_guards(p, current);
         if (err != RAMPART_OK) {
             result->corrupted_count++;
             invoke_callback(p, err, rp_block_get_user_ptr(current));
@@ -500,9 +500,9 @@ rampart_error_t rampart_get_block_info(rampart_pool_t *pool,
     info->total_size = block->total_size;
     info->owner_thread = rp_thread_id_to_ulong(block->owner_thread);
     info->front_guard_valid =
-        (rp_block_validate_front_guard(block) == RAMPART_OK);
+        (rp_block_validate_front_guard(p, block) == RAMPART_OK);
     info->rear_guard_valid =
-        (rp_block_validate_rear_guard(block) == RAMPART_OK);
+        (rp_block_validate_rear_guard(p, block) == RAMPART_OK);
 
     rp_pool_unlock(p);
 

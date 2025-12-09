@@ -74,48 +74,56 @@ rampart_error_t rp_block_init_as_free(rp_block_header_t *block,
  * rp_block_init_guards - Initialize guard bands
  *
  * Writes the front and rear guard patterns to the block's guard
- * band regions.
+ * band regions using pool-specific randomized patterns.
  *
+ * @param pool      Pointer to pool header (for randomized patterns)
  * @param block     Pointer to block header
  *
  * @return RAMPART_OK on success, error code on failure
  *
  * @note Block header must be initialized first.
  */
-rampart_error_t rp_block_init_guards(rp_block_header_t *block);
+rampart_error_t rp_block_init_guards(rp_pool_header_t *pool,
+                                      rp_block_header_t *block);
 
 /**
  * rp_block_validate_front_guard - Check front guard band
  *
  * Verifies that the front guard band contains the expected pattern.
  *
+ * @param pool      Pointer to pool header (for randomized patterns)
  * @param block     Pointer to block header
  *
  * @return RAMPART_OK if intact, RAMPART_ERR_GUARD_CORRUPTED if not
  */
-rampart_error_t rp_block_validate_front_guard(const rp_block_header_t *block);
+rampart_error_t rp_block_validate_front_guard(const rp_pool_header_t *pool,
+                                               const rp_block_header_t *block);
 
 /**
  * rp_block_validate_rear_guard - Check rear guard band
  *
  * Verifies that the rear guard band contains the expected pattern.
  *
+ * @param pool      Pointer to pool header (for randomized patterns)
  * @param block     Pointer to block header
  *
  * @return RAMPART_OK if intact, RAMPART_ERR_GUARD_CORRUPTED if not
  */
-rampart_error_t rp_block_validate_rear_guard(const rp_block_header_t *block);
+rampart_error_t rp_block_validate_rear_guard(const rp_pool_header_t *pool,
+                                              const rp_block_header_t *block);
 
 /**
  * rp_block_validate_guards - Check both guard bands
  *
  * Validates both front and rear guard bands.
  *
+ * @param pool      Pointer to pool header (for randomized patterns)
  * @param block     Pointer to block header
  *
  * @return RAMPART_OK if both intact, RAMPART_ERR_GUARD_CORRUPTED if either corrupted
  */
-rampart_error_t rp_block_validate_guards(const rp_block_header_t *block);
+rampart_error_t rp_block_validate_guards(const rp_pool_header_t *pool,
+                                          const rp_block_header_t *block);
 
 /* ============================================================================
  * Block Validation Functions
@@ -137,6 +145,7 @@ rampart_error_t rp_block_validate_magic(const rp_block_header_t *block);
  *
  * Performs comprehensive validation: magic number, flags, and guard bands.
  *
+ * @param pool      Pointer to pool header (for randomized patterns)
  * @param block     Pointer to block header
  *
  * @return RAMPART_OK if valid, appropriate error code if not
@@ -145,7 +154,8 @@ rampart_error_t rp_block_validate_magic(const rp_block_header_t *block);
  * @retval RAMPART_ERR_INVALID_BLOCK    Magic number invalid or block not allocated
  * @retval RAMPART_ERR_GUARD_CORRUPTED  Guard band corruption detected
  */
-rampart_error_t rp_block_validate(const rp_block_header_t *block);
+rampart_error_t rp_block_validate(const rp_pool_header_t *pool,
+                                   const rp_block_header_t *block);
 
 /**
  * rp_block_is_allocated - Check if block is allocated

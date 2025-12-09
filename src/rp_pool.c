@@ -26,6 +26,40 @@
 #include "internal/rp_thread.h"
 #include "internal/rp_wipe.h"
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
+
+/* ============================================================================
+ * Random Pattern Generation
+ * ============================================================================ */
+
+/**
+ * rp_generate_random_ulong - Generate a random unsigned long
+ *
+ * Uses /dev/urandom on POSIX systems. Falls back to address XOR time
+ * if urandom is unavailable.
+ *
+ * @return Random unsigned long value
+ */
+static unsigned long rp_generate_random_ulong(void) {
+    unsigned long result = 0;
+    FILE *urandom;
+
+    urandom = fopen("/dev/urandom", "rb");
+    if (urandom != NULL) {
+        if (fread(&result, sizeof(result), 1, urandom) != 1) {
+            result = 0;  /* Read failed, will use fallback */
+        }
+        fclose(urandom);
+    }
+
+    /* Fallback: use address + time (weak but better than nothing) */
+    if (result == 0) {
+        result = (unsigned long)(size_t)&result ^ (unsigned long)time(NULL);
+    }
+
+    return result;
+}
 
 /* ============================================================================
  * Pool Initialization
@@ -65,6 +99,19 @@ rp_pool_header_t *rp_pool_init(void *pool_memory,
     pool->validate_on_free = config->validate_on_free;
     pool->error_callback = config->error_callback;
     pool->callback_user_data = config->callback_user_data;
+
+    /* Generate random guard patterns (VULN-004 fix) */
+    pool->guard_front_pattern = rp_generate_random_ulong();
+    pool->guard_rear_pattern = rp_generate_random_ulong();
+
+    /* Ensure patterns are non-zero and different */
+    if (pool->guard_front_pattern == 0) {
+        pool->guard_front_pattern = RP_GUARD_FRONT_PATTERN;
+    }
+    if (pool->guard_rear_pattern == 0 ||
+        pool->guard_rear_pattern == pool->guard_front_pattern) {
+        pool->guard_rear_pattern = RP_GUARD_REAR_PATTERN;
+    }
 
     /* Initialize mutex */
     err = rp_mutex_init(&pool->mutex);

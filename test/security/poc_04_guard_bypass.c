@@ -12,6 +12,9 @@
  *         security feature can be trivially defeated.
  *
  * LOCATION: h/internal/rp_types.h:71-80
+ *
+ * STATUS: FIXED - Guard patterns are now randomized per-pool at init time.
+ *         The attacker no longer knows the expected pattern values.
  */
 
 #include <stdio.h>
@@ -20,27 +23,28 @@
 #include "rampart.h"
 
 /*
- * Guard patterns from rp_types.h:
+ * OLD Guard patterns from rp_types.h (before fix):
  * #define RP_GUARD_FRONT_PATTERN 0xDEADBEEFUL
  * #define RP_GUARD_REAR_PATTERN  0xFEEDFACEUL
  * #define RP_GUARD_SIZE 16
  *
- * Each guard is 16 bytes filled with the 4-byte pattern repeated.
+ * With VULN-004 fix, these are still defined but only used as fallbacks.
+ * Each pool now generates random patterns at initialization time.
  */
 
 #define RP_GUARD_SIZE 16
-#define RP_GUARD_REAR_PATTERN 0xFEEDFACEUL
+#define OLD_GUARD_REAR_PATTERN 0xFEEDFACEUL
 
-/* Write the expected rear guard pattern */
-static void write_fake_guard(unsigned char *ptr) {
+/* Write the OLD expected rear guard pattern (pre-fix attack) */
+static void write_fake_guard_old_pattern(unsigned char *ptr) {
     unsigned char pattern[4];
     int i;
 
     /* Big-endian byte order (as used in rp_block.c) */
-    pattern[0] = (unsigned char)((RP_GUARD_REAR_PATTERN >> 24) & 0xFF);
-    pattern[1] = (unsigned char)((RP_GUARD_REAR_PATTERN >> 16) & 0xFF);
-    pattern[2] = (unsigned char)((RP_GUARD_REAR_PATTERN >> 8) & 0xFF);
-    pattern[3] = (unsigned char)(RP_GUARD_REAR_PATTERN & 0xFF);
+    pattern[0] = (unsigned char)((OLD_GUARD_REAR_PATTERN >> 24) & 0xFF);
+    pattern[1] = (unsigned char)((OLD_GUARD_REAR_PATTERN >> 16) & 0xFF);
+    pattern[2] = (unsigned char)((OLD_GUARD_REAR_PATTERN >> 8) & 0xFF);
+    pattern[3] = (unsigned char)(OLD_GUARD_REAR_PATTERN & 0xFF);
 
     for (i = 0; i < RP_GUARD_SIZE; i++) {
         ptr[i] = pattern[i % 4];
@@ -131,11 +135,15 @@ int main(void) {
     printf("[*] Overflowing buffer by 20 bytes...\n");
     memset(next_block, 'Y', 64 + 20);
 
-    /* NOW: Repair the rear guard with known pattern! */
-    printf("[*] Repairing rear guard with known pattern 0xFEEDFACE...\n");
-    write_fake_guard((unsigned char *)(next_block + 64));
+    /*
+     * NOW: Try to repair the rear guard with OLD known pattern!
+     * With the VULN-004 fix, this should FAIL because the pool uses
+     * randomized patterns that the attacker doesn't know.
+     */
+    printf("[*] Attempting to repair rear guard with OLD pattern 0xFEEDFACE...\n");
+    write_fake_guard_old_pattern((unsigned char *)(next_block + 64));
 
-    /* Try to free - should PASS despite overflow! */
+    /* Try to free - should FAIL because attacker doesn't know the actual pattern */
     err = rampart_free(pool, next_block);
     printf("[*] rampart_free() returned: %s\n", rampart_error_string(err));
 
@@ -144,43 +152,44 @@ int main(void) {
         printf("[!] Buffer overflow went UNDETECTED!\n");
         printf("[!] Attacker wrote 20 bytes beyond allocation.\n");
         printf("[!] Memory corruption occurred silently.\n");
+    } else if (err == RAMPART_ERR_GUARD_CORRUPTED) {
+        printf("\n[FIXED] Guard bypass BLOCKED!\n");
+        printf("[+] Attack failed - attacker's fake pattern didn't match.\n");
+        printf("[+] Per-pool randomized patterns prevent this attack.\n");
     } else {
-        printf("[+] Attack failed, guard validation still caught it.\n");
+        printf("[?] Unexpected error: %s\n", rampart_error_string(err));
     }
 
     /*
-     * IMPACT DEMONSTRATION
+     * IMPACT DEMONSTRATION (pre-fix)
      */
-    printf("\n=== Attack Impact ===\n");
-    printf("With guard bypass, attacker can:\n");
+    printf("\n=== Attack Impact (before fix) ===\n");
+    printf("With predictable guards, attacker could:\n");
     printf("  1. Overflow heap buffers undetected\n");
     printf("  2. Corrupt adjacent block headers\n");
     printf("  3. Achieve arbitrary write on next free/alloc\n");
     printf("  4. Execute arbitrary code\n");
 
-    printf("\n=== Known Guard Patterns ===\n");
-    printf("  Front Guard: 0xDEADBEEF (repeated 4x = 16 bytes)\n");
-    printf("  Rear Guard:  0xFEEDFACE (repeated 4x = 16 bytes)\n");
-    printf("  Guard Size:  16 bytes each\n");
+    printf("\n=== Fix Applied ===\n");
+    printf("  Guard patterns are now randomized per-pool at init time.\n");
+    printf("  Attacker cannot predict the expected pattern values.\n");
+    printf("  OLD patterns (0xDEADBEEF, 0xFEEDFACE) only used as fallback.\n");
 
     rampart_shutdown(pool);
 
     printf("\n=== PoC Complete ===\n");
 
     /*
-     * REMEDIATION:
-     * Use per-pool randomized guard patterns:
+     * REMEDIATION (APPLIED):
+     * Per-pool randomized guard patterns via /dev/urandom:
      *
      * In rp_pool_init():
-     *     pool->guard_front_pattern = generate_crypto_random_u32();
-     *     pool->guard_rear_pattern = generate_crypto_random_u32();
+     *     pool->guard_front_pattern = rp_generate_random_ulong();
+     *     pool->guard_rear_pattern = rp_generate_random_ulong();
      *
-     * Then use pool->guard_*_pattern instead of constants.
+     * Guard functions now use pool->guard_*_pattern instead of constants.
      *
-     * Alternative: Include block address in pattern computation:
-     *     pattern = hash(secret_key, block_address)
-     *
-     * This makes each block's guards unique and unpredictable.
+     * This makes each pool's guards unique and unpredictable.
      */
 
     return 0;

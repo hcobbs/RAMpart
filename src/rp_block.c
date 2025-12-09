@@ -130,44 +130,49 @@ rampart_error_t rp_block_init_as_free(rp_block_header_t *block,
  * Guard Band Functions
  * ============================================================================ */
 
-rampart_error_t rp_block_init_guards(rp_block_header_t *block) {
+rampart_error_t rp_block_init_guards(rp_pool_header_t *pool,
+                                      rp_block_header_t *block) {
     unsigned char *front;
     unsigned char *rear;
 
-    if (block == NULL) {
+    if (pool == NULL || block == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     front = RP_FRONT_GUARD(block);
     rear = RP_REAR_GUARD(block);
 
-    write_guard_pattern(front, RP_GUARD_SIZE, RP_GUARD_FRONT_PATTERN);
-    write_guard_pattern(rear, RP_GUARD_SIZE, RP_GUARD_REAR_PATTERN);
+    /* Use pool-specific randomized patterns (VULN-004 fix) */
+    write_guard_pattern(front, RP_GUARD_SIZE, pool->guard_front_pattern);
+    write_guard_pattern(rear, RP_GUARD_SIZE, pool->guard_rear_pattern);
 
     return RAMPART_OK;
 }
 
-rampart_error_t rp_block_validate_front_guard(const rp_block_header_t *block) {
+rampart_error_t rp_block_validate_front_guard(const rp_pool_header_t *pool,
+                                               const rp_block_header_t *block) {
     const unsigned char *front;
 
-    if (block == NULL) {
+    if (pool == NULL || block == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     front = (const unsigned char *)block + sizeof(rp_block_header_t);
 
-    if (!verify_guard_pattern(front, RP_GUARD_SIZE, RP_GUARD_FRONT_PATTERN)) {
+    /* Use pool-specific randomized pattern (VULN-004 fix) */
+    if (!verify_guard_pattern(front, RP_GUARD_SIZE, pool->guard_front_pattern)) {
         return RAMPART_ERR_GUARD_CORRUPTED;
     }
 
     return RAMPART_OK;
 }
 
-rampart_error_t rp_block_validate_rear_guard(const rp_block_header_t *block) {
+rampart_error_t rp_block_validate_rear_guard(const rp_pool_header_t *pool,
+                                              const rp_block_header_t *block) {
     const unsigned char *rear;
     size_t min_total_size;
 
-    if (block == NULL) {
+    if (pool == NULL || block == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
@@ -185,26 +190,28 @@ rampart_error_t rp_block_validate_rear_guard(const rp_block_header_t *block) {
            RP_GUARD_SIZE +
            block->user_size;
 
-    if (!verify_guard_pattern(rear, RP_GUARD_SIZE, RP_GUARD_REAR_PATTERN)) {
+    /* Use pool-specific randomized pattern (VULN-004 fix) */
+    if (!verify_guard_pattern(rear, RP_GUARD_SIZE, pool->guard_rear_pattern)) {
         return RAMPART_ERR_GUARD_CORRUPTED;
     }
 
     return RAMPART_OK;
 }
 
-rampart_error_t rp_block_validate_guards(const rp_block_header_t *block) {
+rampart_error_t rp_block_validate_guards(const rp_pool_header_t *pool,
+                                          const rp_block_header_t *block) {
     rampart_error_t err;
 
-    if (block == NULL) {
+    if (pool == NULL || block == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
-    err = rp_block_validate_front_guard(block);
+    err = rp_block_validate_front_guard(pool, block);
     if (err != RAMPART_OK) {
         return err;
     }
 
-    err = rp_block_validate_rear_guard(block);
+    err = rp_block_validate_rear_guard(pool, block);
     if (err != RAMPART_OK) {
         return err;
     }
@@ -228,10 +235,11 @@ rampart_error_t rp_block_validate_magic(const rp_block_header_t *block) {
     return RAMPART_OK;
 }
 
-rampart_error_t rp_block_validate(const rp_block_header_t *block) {
+rampart_error_t rp_block_validate(const rp_pool_header_t *pool,
+                                   const rp_block_header_t *block) {
     rampart_error_t err;
 
-    if (block == NULL) {
+    if (pool == NULL || block == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
@@ -247,7 +255,7 @@ rampart_error_t rp_block_validate(const rp_block_header_t *block) {
     }
 
     /* Check guard bands */
-    err = rp_block_validate_guards(block);
+    err = rp_block_validate_guards(pool, block);
     if (err != RAMPART_OK) {
         return err;
     }

@@ -256,6 +256,16 @@ typedef struct rp_pool_header_s {
      * @brief End of pool memory
      */
     unsigned char *pool_end;
+
+    /**
+     * @brief Randomized front guard pattern (per-pool)
+     */
+    unsigned long guard_front_pattern;
+
+    /**
+     * @brief Randomized rear guard pattern (per-pool)
+     */
+    unsigned long guard_rear_pattern;
 } rp_pool_header_t;
 
 /* ============================================================================

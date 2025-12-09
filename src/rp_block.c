@@ -310,6 +310,32 @@ rp_block_header_t *rp_block_from_user_ptr(void *ptr) {
     return RP_USER_TO_BLOCK(ptr);
 }
 
+rp_block_header_t *rp_block_from_user_ptr_safe(rp_pool_header_t *pool,
+                                                void *ptr) {
+    unsigned char *block_addr;
+    size_t offset;
+
+    if (ptr == NULL || pool == NULL) {
+        return NULL;
+    }
+
+    offset = sizeof(rp_block_header_t) + RP_GUARD_SIZE;
+    block_addr = (unsigned char *)ptr - offset;
+
+    /* Bounds check BEFORE any dereference */
+    if (block_addr < pool->pool_start ||
+        block_addr >= pool->pool_end) {
+        return NULL;  /* Outside pool bounds */
+    }
+
+    /* Alignment check */
+    if (((size_t)block_addr % RP_ALIGNMENT) != 0) {
+        return NULL;  /* Misaligned */
+    }
+
+    return (rp_block_header_t *)block_addr;
+}
+
 /* ============================================================================
  * Block State Functions
  * ============================================================================ */

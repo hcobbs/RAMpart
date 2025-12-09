@@ -128,6 +128,26 @@ rampart_error_t rp_wipe_memory_single(void *ptr,
 rampart_error_t rp_wipe_block_user_data(rp_block_header_t *block);
 
 /**
+ * rp_wipe_block_user_and_guards - Wipe user data and guard bands
+ *
+ * Securely wipes the user data portion AND the front/rear guard bands.
+ * Leaves the block header intact so the block can be reused.
+ *
+ * VULN-022 fix: Guard bands must be wiped to prevent forensic detection
+ * of RAMpart usage and historic allocation boundaries.
+ *
+ * @param block     Pointer to block header
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_ERR_NULL_PARAM   block is NULL
+ *
+ * @note Block header remains intact for free list management.
+ * @note Use this instead of rp_wipe_block_user_data for proper cleanup.
+ */
+rampart_error_t rp_wipe_block_user_and_guards(rp_block_header_t *block);
+
+/**
  * rp_wipe_block_full - Wipe entire block including metadata
  *
  * Securely wipes the entire block including headers. Used during

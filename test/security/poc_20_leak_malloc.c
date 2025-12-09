@@ -9,6 +9,10 @@
  * CWE-212: Improper Removal of Sensitive Information
  *
  * LOCATION: src/rampart.c:546-547
+ *
+ * STATUS: FIXED - Leak info array now includes a hidden size header.
+ *         rampart_free_leak_info() recovers the count and securely wipes
+ *         the entire allocation (addresses, sizes, thread IDs) before freeing.
  */
 
 #include <stdio.h>

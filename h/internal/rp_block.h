@@ -262,6 +262,47 @@ void rp_block_mark_allocated(rp_block_header_t *block);
 void rp_block_mark_freed(rp_block_header_t *block);
 
 /* ============================================================================
+ * Owner Canary Functions (VULN-005 fix)
+ * ============================================================================ */
+
+/**
+ * rp_block_compute_canary - Compute owner canary value
+ *
+ * Computes a per-block canary based on pool pattern and block address.
+ * This makes the canary unpredictable and unique per block.
+ *
+ * @param pool      Pointer to pool header
+ * @param block     Pointer to block header
+ *
+ * @return Computed canary value
+ */
+unsigned long rp_block_compute_canary(const rp_pool_header_t *pool,
+                                       const rp_block_header_t *block);
+
+/**
+ * rp_block_set_canary - Set owner canary on block
+ *
+ * Computes and stores the canary value in the block header.
+ *
+ * @param pool      Pointer to pool header
+ * @param block     Pointer to block header
+ */
+void rp_block_set_canary(rp_pool_header_t *pool, rp_block_header_t *block);
+
+/**
+ * rp_block_verify_canary - Verify owner canary
+ *
+ * Checks that the stored canary matches the expected value.
+ *
+ * @param pool      Pointer to pool header
+ * @param block     Pointer to block header
+ *
+ * @return RAMPART_OK if valid, RAMPART_ERR_INVALID_BLOCK if corrupted
+ */
+rampart_error_t rp_block_verify_canary(const rp_pool_header_t *pool,
+                                        const rp_block_header_t *block);
+
+/* ============================================================================
  * Size Calculation Functions
  * ============================================================================ */
 

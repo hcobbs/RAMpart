@@ -148,6 +148,14 @@ typedef struct rp_block_header_s {
     unsigned int flags;
 
     /**
+     * @brief Canary protecting owner_thread from corruption (VULN-005 fix)
+     *
+     * Computed as: pool->guard_front_pattern XOR block_address
+     * Verified before trusting owner_thread field.
+     */
+    unsigned long owner_canary;
+
+    /**
      * @brief Thread ID of the allocating thread
      */
     rp_thread_id_t owner_thread;

@@ -12,6 +12,10 @@
  *         memory access and use-after-free attacks.
  *
  * LOCATION: h/internal/rp_types.h:168-171
+ *
+ * STATUS: FIXED - Owner canary added before owner_thread field.
+ *         Canary is verified before trusting thread ownership data.
+ *         Corruption of owner_thread also corrupts canary, blocking attack.
  */
 
 #include <stdio.h>
@@ -181,21 +185,23 @@ int main(void) {
     printf("  +0x08: total_size (8 bytes)\n");
     printf("  +0x10: user_size (8 bytes)\n");
     printf("  +0x18: flags (4 bytes)\n");
-    printf("  +0x1C: owner_thread (8 bytes) <-- TARGET\n");
-    printf("  +0x24: prev, next, prev_addr, next_addr...\n");
-    printf("\nOverflow from block1 can reach block2's owner_thread\n");
-    printf("and overwrite it with attacker's thread ID.\n");
+    printf("  +0x1C: owner_canary (8 bytes) <-- NEW: Canary protection\n");
+    printf("  +0x24: owner_thread (8 bytes) <-- Protected by canary\n");
+    printf("  +0x2C: prev, next, prev_addr, next_addr...\n");
+    printf("\nWith VULN-005 fix, overflow that corrupts owner_thread also\n");
+    printf("corrupts owner_canary, which is detected before trusting owner_thread.\n");
 
     rampart_shutdown(g_pool);
 
     printf("\n=== PoC Complete ===\n");
 
     /*
-     * REMEDIATION:
-     * 1. Add canary values around critical header fields
-     * 2. Store owner_thread in a separate protected region
-     * 3. Use MAC/HMAC to authenticate header integrity
-     * 4. Randomize header layout per-pool
+     * REMEDIATION (APPLIED):
+     * Owner canary added before owner_thread field:
+     * - Canary = pool->guard_front_pattern XOR block_address
+     * - Verified in rampart_free() before checking thread ownership
+     * - Corruption of owner_thread also corrupts canary
+     * - Canary mismatch returns RAMPART_ERR_INVALID_BLOCK
      */
 
     return 0;

@@ -9,6 +9,11 @@
  * CWE-14: Compiler Removal of Code to Clear Buffers
  *
  * LOCATION: src/rp_wipe.c:43-44
+ *
+ * STATUS: FIXED - Proper memory barriers added for all major compilers.
+ *         GCC/Clang: inline asm with memory clobber
+ *         MSVC: _ReadWriteBarrier() intrinsic
+ *         Others: volatile function pointer technique prevents optimization
  */
 
 #include <stdio.h>

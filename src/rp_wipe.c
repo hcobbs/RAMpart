@@ -23,25 +23,47 @@
 
 #include "internal/rp_wipe.h"
 #include "internal/rp_types.h"
+#include <string.h>
+
+/* MSVC intrinsics for memory barrier */
+#if defined(_MSC_VER)
+#include <intrin.h>
+#pragma intrinsic(_ReadWriteBarrier)
+#endif
 
 /* ============================================================================
- * Compiler/Memory Barrier
+ * Compiler/Memory Barrier (VULN-015 fix)
  * ============================================================================
  * Prevent the compiler from optimizing away our writes and ensure
  * writes are visible to memory.
+ *
+ * Different compilers require different approaches:
+ * - GCC/Clang: inline asm with memory clobber
+ * - MSVC: _ReadWriteBarrier() intrinsic
+ * - Others: volatile function pointer to force the call
  */
 
 void rp_wipe_memory_barrier(void) {
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
     /* GCC/Clang memory barrier (works even in C89 mode) */
     __asm__ __volatile__("" ::: "memory");
+#elif defined(_MSC_VER)
+    /* MSVC compiler barrier */
+    _ReadWriteBarrier();
 #else
     /*
-     * Fallback for other compilers.
-     * The volatile read/write serves as a compiler barrier.
+     * Portable fallback using volatile function pointer (VULN-015 fix).
+     *
+     * The compiler cannot optimize away a call through a volatile function
+     * pointer because it cannot prove the pointer always points to the same
+     * function. This forces all preceding memory writes to complete.
+     *
+     * We call memset with size 0, which does nothing but the compiler
+     * cannot know that and must preserve all prior writes.
      */
-    static volatile int barrier_dummy = 0;
-    barrier_dummy = barrier_dummy;
+    static void * (*volatile memset_ptr)(void *, int, size_t) = memset;
+    static char barrier_buf[1];
+    (void)memset_ptr(barrier_buf, 0, 0);
 #endif
 }
 

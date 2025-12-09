@@ -25,7 +25,7 @@ This document tracks security findings, fixes, and release history.
 | VULN-011 | High | FIXED | Reentrancy via error callback |
 | VULN-012 | Medium | FIXED | Block split size underflow |
 | VULN-013 | Medium | FIXED | Optional guard validation bypass |
-| VULN-015 | Medium | OPEN | Weak memory barrier fallback |
+| VULN-015 | Medium | FIXED | Weak memory barrier fallback |
 | VULN-018 | Medium | OPEN | Magic number spoofing |
 | VULN-019 | Medium | OPEN | No pool handle validation |
 | VULN-020 | Medium | OPEN | Leak info uses system malloc |
@@ -33,7 +33,7 @@ This document tracks security findings, fixes, and release history.
 | VULN-022 | Medium | OPEN | Guard bands not wiped |
 | VULN-023 | Medium | OPEN | Signed config values |
 
-**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 7 Medium (2 FIXED, 7 remaining)
+**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 6 Medium (3 FIXED, 6 remaining)
 
 *Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 

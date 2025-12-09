@@ -413,6 +413,44 @@ void rp_pool_split_block(rp_pool_header_t *pool,
     pool->free_size += remainder_size;
 }
 
+/**
+ * rp_pool_is_valid_block_ptr - Check if pointer is valid within pool
+ *
+ * Validates that a block pointer:
+ * 1. Is within pool boundaries
+ * 2. Is properly aligned to RP_ALIGNMENT
+ *
+ * This is a security check (VULN-007 fix) to prevent use-after-free
+ * attacks via corrupted prev_addr/next_addr pointers.
+ *
+ * @param pool  Pool header
+ * @param ptr   Pointer to validate
+ *
+ * @return 1 if valid, 0 if invalid
+ */
+static int rp_pool_is_valid_block_ptr(const rp_pool_header_t *pool,
+                                       const rp_block_header_t *ptr) {
+    const unsigned char *addr;
+
+    if (ptr == NULL) {
+        return 0;
+    }
+
+    addr = (const unsigned char *)ptr;
+
+    /* Check bounds */
+    if (addr < pool->pool_start || addr >= pool->pool_end) {
+        return 0;
+    }
+
+    /* Check alignment */
+    if (((size_t)addr % RP_ALIGNMENT) != 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
 rp_block_header_t *rp_pool_coalesce(rp_pool_header_t *pool,
                                      rp_block_header_t *block) {
     rp_block_header_t *prev_block;
@@ -424,6 +462,15 @@ rp_block_header_t *rp_pool_coalesce(rp_pool_header_t *pool,
 
     /* Try to coalesce with next block (by address) */
     next_block = block->next_addr;
+
+    /*
+     * VULN-007 fix: Validate next_addr before accessing.
+     * If corrupted via overflow, skip coalescing to prevent UAF.
+     */
+    if (next_block != NULL && !rp_pool_is_valid_block_ptr(pool, next_block)) {
+        next_block = NULL;  /* Treat as no next block */
+    }
+
     if (next_block != NULL && rp_block_is_free(next_block)) {
         /* Remove next block from free list */
         rp_pool_remove_from_free_list(pool, next_block);
@@ -433,13 +480,23 @@ rp_block_header_t *rp_pool_coalesce(rp_pool_header_t *pool,
 
         /* Update address links */
         block->next_addr = next_block->next_addr;
-        if (next_block->next_addr != NULL) {
+        if (next_block->next_addr != NULL &&
+            rp_pool_is_valid_block_ptr(pool, next_block->next_addr)) {
             next_block->next_addr->prev_addr = block;
         }
     }
 
     /* Try to coalesce with previous block (by address) */
     prev_block = block->prev_addr;
+
+    /*
+     * VULN-007 fix: Validate prev_addr before accessing.
+     * If corrupted via overflow, skip coalescing to prevent UAF.
+     */
+    if (prev_block != NULL && !rp_pool_is_valid_block_ptr(pool, prev_block)) {
+        prev_block = NULL;  /* Treat as no previous block */
+    }
+
     if (prev_block != NULL && rp_block_is_free(prev_block)) {
         /* Remove both blocks from free list */
         rp_pool_remove_from_free_list(pool, block);
@@ -450,7 +507,8 @@ rp_block_header_t *rp_pool_coalesce(rp_pool_header_t *pool,
 
         /* Update address links */
         prev_block->next_addr = block->next_addr;
-        if (block->next_addr != NULL) {
+        if (block->next_addr != NULL &&
+            rp_pool_is_valid_block_ptr(pool, block->next_addr)) {
             block->next_addr->prev_addr = prev_block;
         }
 

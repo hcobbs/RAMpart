@@ -30,6 +30,39 @@
 #include <string.h>
 
 /* ============================================================================
+ * Pool Validation (VULN-019 fix)
+ * ============================================================================ */
+
+/**
+ * validate_pool - Verify pool handle is valid before use
+ *
+ * Checks that the pool pointer is non-NULL and contains the correct
+ * magic number. This prevents use of garbage/corrupted pool handles.
+ *
+ * IMPORTANT: This check must happen BEFORE any pool fields are accessed
+ * (including the mutex lock), otherwise we may crash or be exploited.
+ *
+ * @param pool  Pool handle to validate
+ *
+ * @return 1 if valid, 0 if invalid
+ */
+static int validate_pool(rampart_pool_t *pool) {
+    rp_pool_header_t *p;
+
+    if (pool == NULL) {
+        return 0;
+    }
+
+    p = (rp_pool_header_t *)pool;
+
+    if (p->pool_magic != RP_POOL_MAGIC) {
+        return 0;
+    }
+
+    return 1;
+}
+
+/* ============================================================================
  * Error Strings
  * ============================================================================ */
 
@@ -141,8 +174,9 @@ rampart_error_t rampart_set_error_callback(rampart_pool_t *pool,
                                             void *user_data) {
     rp_pool_header_t *p;
 
-    if (pool == NULL) {
-        return RAMPART_ERR_NULL_PARAM;
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
     }
 
     p = (rp_pool_header_t *)pool;
@@ -224,7 +258,8 @@ rampart_shutdown_result_t rampart_shutdown(rampart_pool_t *pool) {
 
     memset(&result, 0, sizeof(result));
 
-    if (pool == NULL) {
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
         return result;
     }
 
@@ -266,8 +301,9 @@ void *rampart_alloc(rampart_pool_t *pool, size_t size) {
     rampart_error_t err;
     void *user_ptr;
 
-    if (pool == NULL) {
-        rp_thread_set_last_error(RAMPART_ERR_NULL_PARAM);
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        rp_thread_set_last_error(RAMPART_ERR_NOT_INITIALIZED);
         return NULL;
     }
 
@@ -307,8 +343,9 @@ void *rampart_alloc(rampart_pool_t *pool, size_t size) {
 void *rampart_calloc(rampart_pool_t *pool, size_t nmemb, size_t elem_size) {
     size_t total_size;
 
-    if (pool == NULL) {
-        rp_thread_set_last_error(RAMPART_ERR_NULL_PARAM);
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        rp_thread_set_last_error(RAMPART_ERR_NOT_INITIALIZED);
         return NULL;
     }
 
@@ -333,8 +370,13 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
     rp_block_header_t *block;
     rampart_error_t err;
 
-    if (pool == NULL || ptr == NULL) {
+    if (ptr == NULL) {
         return RAMPART_ERR_NULL_PARAM;
+    }
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
     }
 
     p = (rp_pool_header_t *)pool;
@@ -415,8 +457,13 @@ rampart_error_t rampart_validate(rampart_pool_t *pool, void *ptr) {
     rp_block_header_t *block;
     rampart_error_t err;
 
-    if (pool == NULL || ptr == NULL) {
+    if (ptr == NULL) {
         return RAMPART_ERR_NULL_PARAM;
+    }
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
     }
 
     p = (rp_pool_header_t *)pool;
@@ -443,11 +490,16 @@ rampart_error_t rampart_validate_pool(rampart_pool_t *pool,
     rp_block_header_t *current;
     rampart_error_t err;
 
-    if (pool == NULL || result == NULL) {
+    if (result == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     memset(result, 0, sizeof(rampart_validation_result_t));
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
+    }
 
     p = (rp_pool_header_t *)pool;
 
@@ -479,11 +531,16 @@ rampart_error_t rampart_get_stats(rampart_pool_t *pool,
                                    rampart_stats_t *stats) {
     rp_pool_header_t *p;
 
-    if (pool == NULL || stats == NULL) {
+    if (stats == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     memset(stats, 0, sizeof(rampart_stats_t));
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
+    }
 
     p = (rp_pool_header_t *)pool;
 
@@ -511,11 +568,16 @@ rampart_error_t rampart_get_block_info(rampart_pool_t *pool,
     rp_block_header_t *block;
     rampart_error_t err;
 
-    if (pool == NULL || ptr == NULL || info == NULL) {
+    if (ptr == NULL || info == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     memset(info, 0, sizeof(rampart_block_info_t));
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
+    }
 
     p = (rp_pool_header_t *)pool;
 
@@ -560,12 +622,17 @@ rampart_error_t rampart_get_leaks(rampart_pool_t *pool,
     size_t count;
     size_t i;
 
-    if (pool == NULL || leaks == NULL || leak_count == NULL) {
+    if (leaks == NULL || leak_count == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     *leaks = NULL;
     *leak_count = 0;
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
+    }
 
     p = (rp_pool_header_t *)pool;
 

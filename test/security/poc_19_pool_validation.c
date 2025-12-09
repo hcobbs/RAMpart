@@ -8,6 +8,10 @@
  * CWE-476: NULL Pointer Dereference (and related)
  *
  * LOCATION: src/rampart.c:269
+ *
+ * STATUS: FIXED - Pool magic number validation added. All public API functions
+ *         now verify pool_magic == RP_POOL_MAGIC before accessing any pool
+ *         fields. Invalid handles return RAMPART_ERR_NOT_INITIALIZED.
  */
 
 #include <stdio.h>

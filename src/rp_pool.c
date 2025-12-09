@@ -89,6 +89,7 @@ rp_pool_header_t *rp_pool_init(void *pool_memory,
     usable_size = pool_size - RP_POOL_HEADER_SIZE;
 
     /* Initialize pool header */
+    pool->pool_magic = RP_POOL_MAGIC;  /* VULN-019 fix: Set pool magic */
     pool->total_size = pool_size;
     pool->usable_size = usable_size;
     pool->free_size = usable_size;
@@ -142,6 +143,9 @@ void rp_pool_destroy(rp_pool_header_t *pool) {
     if (pool == NULL) {
         return;
     }
+
+    /* Clear pool magic first (VULN-019 fix) to invalidate pool immediately */
+    pool->pool_magic = 0;
 
     /* Save total_size before any wiping (prevents use-after-wipe) */
     total_size = pool->total_size;

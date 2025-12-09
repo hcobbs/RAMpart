@@ -219,6 +219,30 @@ rampart_error_t rp_wipe_block_user_data(rp_block_header_t *block) {
     return rp_wipe_memory(user_ptr, block->user_size);
 }
 
+rampart_error_t rp_wipe_block_user_and_guards(rp_block_header_t *block) {
+    unsigned char *front_guard;
+    size_t wipe_size;
+
+    if (block == NULL) {
+        return RAMPART_ERR_NULL_PARAM;
+    }
+
+    /*
+     * VULN-022 fix: Wipe the entire region from front guard through rear guard.
+     *
+     * Layout: [header][front_guard][user_data][rear_guard]
+     *                 ^                               ^
+     *                 wipe starts                     wipe ends
+     *
+     * Size = front_guard + user_data + rear_guard
+     *      = RP_GUARD_SIZE + user_size + RP_GUARD_SIZE
+     */
+    front_guard = RP_FRONT_GUARD(block);
+    wipe_size = RP_GUARD_SIZE + block->user_size + RP_GUARD_SIZE;
+
+    return rp_wipe_memory(front_guard, wipe_size);
+}
+
 rampart_error_t rp_wipe_block_full(rp_block_header_t *block, size_t total_size) {
     if (block == NULL) {
         return RAMPART_ERR_NULL_PARAM;

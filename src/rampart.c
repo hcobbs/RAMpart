@@ -274,8 +274,8 @@ rampart_shutdown_result_t rampart_shutdown(rampart_pool_t *pool) {
         result.leaked_blocks++;
         result.leaked_bytes += current->user_size;
 
-        /* Wipe leaked block data */
-        rp_wipe_block_user_data(current);
+        /* VULN-022 fix: Wipe leaked block data AND guard bands */
+        rp_wipe_block_user_and_guards(current);
 
         current = current->next;
     }
@@ -437,8 +437,8 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
         return RAMPART_ERR_GUARD_CORRUPTED;
     }
 
-    /* Securely wipe user data */
-    rp_wipe_block_user_data(block);
+    /* VULN-022 fix: Securely wipe user data AND guard bands */
+    rp_wipe_block_user_and_guards(block);
 
     /* Return block to pool */
     err = rp_pool_free(p, block);

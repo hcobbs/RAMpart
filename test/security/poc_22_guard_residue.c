@@ -9,6 +9,10 @@
  * CWE-200: Exposure of Sensitive Information
  *
  * LOCATION: src/rp_wipe.c:131
+ *
+ * STATUS: FIXED - Added rp_wipe_block_user_and_guards() which wipes the
+ *         entire region including front guard, user data, and rear guard.
+ *         Used in rampart_free() and rampart_shutdown().
  */
 
 #include <stdio.h>

@@ -372,6 +372,7 @@ void rp_block_mark_freed(rp_block_header_t *block) {
 
     block->magic = RP_BLOCK_FREED_MAGIC;
     block->flags &= ~(unsigned int)RP_FLAG_ALLOCATED;
+    block->user_size = 0;     /* Clear user_size to prevent info leak (VULN-009 fix) */
     block->owner_canary = 0;  /* Clear canary on free */
     block->owner_thread = zero_thread;
 }

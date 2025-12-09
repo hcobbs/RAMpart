@@ -234,25 +234,6 @@ void rp_block_mark_allocated(rp_block_header_t *block);
  */
 void rp_block_mark_freed(rp_block_header_t *block);
 
-/**
- * rp_block_set_encrypted - Mark block data as encrypted
- *
- * Sets the encrypted flag on the block.
- *
- * @param block         Pointer to block header
- * @param encrypted     Non-zero if encrypted, zero if not
- */
-void rp_block_set_encrypted(rp_block_header_t *block, int encrypted);
-
-/**
- * rp_block_is_encrypted - Check if block data is encrypted
- *
- * @param block     Pointer to block header
- *
- * @return Non-zero if encrypted, zero if not
- */
-int rp_block_is_encrypted(const rp_block_header_t *block);
-
 /* ============================================================================
  * Size Calculation Functions
  * ============================================================================ */

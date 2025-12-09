@@ -105,18 +105,6 @@ typedef pthread_t rp_thread_id_t;
  */
 #define RP_POOL_HEADER_SIZE 512
 
-/**
- * @def RP_CRYPTO_BLOCK_SIZE
- * @brief Feistel cipher block size in bytes
- */
-#define RP_CRYPTO_BLOCK_SIZE 8
-
-/**
- * @def RP_CRYPTO_ROUNDS
- * @brief Number of Feistel cipher rounds
- */
-#define RP_CRYPTO_ROUNDS 16
-
 /* ============================================================================
  * Block Flags
  * ============================================================================ */
@@ -126,12 +114,6 @@ typedef pthread_t rp_thread_id_t;
  * @brief Block is currently allocated
  */
 #define RP_FLAG_ALLOCATED  0x01
-
-/**
- * @def RP_FLAG_ENCRYPTED
- * @brief Block data is currently encrypted
- */
-#define RP_FLAG_ENCRYPTED  0x02
 
 /* ============================================================================
  * Internal Structures
@@ -236,15 +218,8 @@ typedef struct rp_pool_header_s {
     /**
      * @brief Configuration flags (copied from rampart_config_t)
      */
-    int encryption_enabled;
     int strict_thread_mode;
     int validate_on_free;
-
-    /**
-     * @brief Encryption key (if enabled)
-     */
-    unsigned char encryption_key[RAMPART_MAX_KEY_SIZE];
-    size_t encryption_key_size;
 
     /**
      * @brief Error callback

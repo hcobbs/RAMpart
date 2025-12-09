@@ -25,7 +25,6 @@
 #include "internal/rp_block.h"
 #include "internal/rp_thread.h"
 #include "internal/rp_wipe.h"
-#include "internal/rp_crypto.h"
 #include <string.h>
 
 /* ============================================================================
@@ -62,23 +61,10 @@ rp_pool_header_t *rp_pool_init(void *pool_memory,
     pool->free_block_count = 1;
 
     /* Copy configuration */
-    pool->encryption_enabled = config->encryption_enabled;
     pool->strict_thread_mode = config->strict_thread_mode;
     pool->validate_on_free = config->validate_on_free;
     pool->error_callback = config->error_callback;
     pool->callback_user_data = config->callback_user_data;
-
-    /* Handle encryption key */
-    memset(pool->encryption_key, 0, sizeof(pool->encryption_key));
-    pool->encryption_key_size = 0;
-    if (config->encryption_enabled && config->encryption_key != NULL) {
-        size_t key_size = config->encryption_key_size;
-        if (key_size > RAMPART_MAX_KEY_SIZE) {
-            key_size = RAMPART_MAX_KEY_SIZE;
-        }
-        memcpy(pool->encryption_key, config->encryption_key, key_size);
-        pool->encryption_key_size = key_size;
-    }
 
     /* Initialize mutex */
     err = rp_mutex_init(&pool->mutex);
@@ -111,9 +97,6 @@ void rp_pool_destroy(rp_pool_header_t *pool) {
 
     /* Save total_size before any wiping (prevents use-after-wipe) */
     total_size = pool->total_size;
-
-    /* Securely wipe encryption key */
-    rp_wipe_memory(pool->encryption_key, sizeof(pool->encryption_key));
 
     /* Destroy mutex */
     rp_mutex_destroy(&pool->mutex);

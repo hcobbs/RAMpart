@@ -22,9 +22,8 @@ int main(void) {
     printf("=== VULN-023: Signed Config Values ===\n\n");
 
     printf("[*] Boolean config fields in rampart_config_t:\n");
-    printf("    int encryption_enabled;   // line 308\n");
-    printf("    int strict_thread_mode;   // line 342\n");
-    printf("    int validate_on_free;     // line 353\n");
+    printf("    int strict_thread_mode;\n");
+    printf("    int validate_on_free;\n");
 
     printf("\n[*] These accept ANY int value, including negative.\n");
 
@@ -36,7 +35,6 @@ int main(void) {
 
     config.strict_thread_mode = -1;
     config.validate_on_free = -999;
-    config.encryption_enabled = 0;  /* Keep disabled to avoid other issues */
 
     printf("[*] Setting:\n");
     printf("    strict_thread_mode = -1\n");

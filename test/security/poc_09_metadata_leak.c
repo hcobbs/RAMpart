@@ -28,7 +28,6 @@
  * - total_size: reveals allocation sizes
  * - user_size: reveals requested sizes
  * - owner_thread: reveals thread IDs
- * - flags: reveals if encryption was used
  * - prev/next pointers: reveals heap layout
  */
 
@@ -96,7 +95,6 @@ int main(void) {
      * Even though user data is wiped, block header contains:
      * - Previous user_size (1337)
      * - Previous thread ID
-     * - Flag indicating if encryption was enabled
      *
      * An attacker can use rampart_get_block_info() to read these,
      * or access them directly if they can read raw memory.
@@ -113,7 +111,6 @@ int main(void) {
         printf("    user_size: %zu bytes\n", info.user_size);
         printf("    total_size: %zu bytes\n", info.total_size);
         printf("    owner_thread: %lu\n", info.owner_thread);
-        printf("    is_encrypted: %d\n", info.is_encrypted);
     }
 
     /*
@@ -129,7 +126,6 @@ int main(void) {
     printf("\n[*] What an attacker learns from freed block headers:\n");
     printf("    - Allocation sizes reveal program patterns\n");
     printf("    - Thread IDs reveal concurrent structure\n");
-    printf("    - Encryption flag reveals security posture\n");
     printf("    - Linked list pointers reveal heap layout\n");
 
     printf("\n[*] User data after reallocation (should be zeroed):\n");

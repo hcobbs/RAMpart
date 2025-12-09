@@ -337,26 +337,6 @@ void rp_block_mark_freed(rp_block_header_t *block) {
     block->owner_thread = zero_thread;
 }
 
-void rp_block_set_encrypted(rp_block_header_t *block, int encrypted) {
-    if (block == NULL) {
-        return;
-    }
-
-    if (encrypted) {
-        block->flags |= RP_FLAG_ENCRYPTED;
-    } else {
-        block->flags &= ~(unsigned int)RP_FLAG_ENCRYPTED;
-    }
-}
-
-int rp_block_is_encrypted(const rp_block_header_t *block) {
-    if (block == NULL) {
-        return 0;
-    }
-
-    return (block->flags & RP_FLAG_ENCRYPTED) != 0;
-}
-
 /* ============================================================================
  * Size Calculation Functions
  * ============================================================================ */

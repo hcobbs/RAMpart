@@ -380,14 +380,19 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
         }
     }
 
-    /* Validate guard bands if configured */
-    if (p->validate_on_free) {
-        err = rp_block_validate_guards(p, block);
-        if (err != RAMPART_OK) {
-            invoke_callback(p, RAMPART_ERR_GUARD_CORRUPTED, ptr);
-            rp_pool_unlock(p);
-            return RAMPART_ERR_GUARD_CORRUPTED;
-        }
+    /*
+     * Always validate guard bands on free (VULN-013 fix).
+     *
+     * Previously this was optional via validate_on_free config, but allowing
+     * corrupted blocks to be freed silently defeats the purpose of guard bands.
+     * Validation is now mandatory for security. The config field is retained
+     * for API compatibility but is ignored.
+     */
+    err = rp_block_validate_guards(p, block);
+    if (err != RAMPART_OK) {
+        invoke_callback(p, RAMPART_ERR_GUARD_CORRUPTED, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_GUARD_CORRUPTED;
     }
 
     /* Securely wipe user data */

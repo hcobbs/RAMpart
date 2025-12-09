@@ -331,9 +331,12 @@ static void test_partial_guard_corruption(void) {
 }
 
 /**
- * test_validate_on_free_disabled - Guards not checked if disabled
+ * test_validate_on_free_always_enabled - Validation cannot be disabled (VULN-013 fix)
+ *
+ * As of version 1.0.1, validate_on_free is always enabled for security.
+ * Setting it to 0 has no effect. This test verifies corruption is still detected.
  */
-static void test_validate_on_free_disabled(void) {
+static void test_validate_on_free_always_enabled(void) {
     rampart_config_t config;
     rampart_pool_t *pool;
     unsigned char *ptr;
@@ -341,7 +344,7 @@ static void test_validate_on_free_disabled(void) {
 
     rampart_config_default(&config);
     config.pool_size = 64 * 1024;
-    config.validate_on_free = 0;  /* Disable validation */
+    config.validate_on_free = 0;  /* Attempt to disable (ignored since VULN-013 fix) */
 
     pool = rampart_init(&config);
     TEST_ASSERT_NOT_NULL(pool);
@@ -352,10 +355,11 @@ static void test_validate_on_free_disabled(void) {
     /* Corrupt rear guard */
     ptr[64] = 0xBA;
 
-    /* Free should succeed (validation disabled) */
+    /* Free should FAIL because validation is now always enabled */
     err = rampart_free(pool, ptr);
-    TEST_ASSERT_OK(err);
+    TEST_ASSERT_ERR(RAMPART_ERR_GUARD_CORRUPTED, err);
 
+    /* Block is still allocated (free failed), so shutdown will clean it up */
     rampart_shutdown(pool);
 }
 
@@ -411,7 +415,7 @@ void run_guard_tests(void) {
     RUN_TEST(test_buffer_overflow_detected);
     RUN_TEST(test_buffer_underflow_detected);
     RUN_TEST(test_partial_guard_corruption);
-    RUN_TEST(test_validate_on_free_disabled);
+    RUN_TEST(test_validate_on_free_always_enabled);
     RUN_TEST(test_guard_sizes_various_allocs);
 
     TEST_SUITE_END();

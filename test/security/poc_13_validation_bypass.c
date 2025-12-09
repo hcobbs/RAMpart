@@ -9,6 +9,11 @@
  * CWE-754: Improper Check for Unusual or Exceptional Conditions
  *
  * LOCATION: src/rampart.c:363-370
+ *
+ * STATUS: FIXED - Guard validation on free is now mandatory and cannot be
+ *         disabled. The validate_on_free config field is retained for API
+ *         compatibility but is ignored. Corrupted blocks can no longer
+ *         silently enter the free list.
  */
 
 #include <stdio.h>

@@ -37,7 +37,6 @@ int main(void) {
     rampart_pool_t *pool;
     void *ptr;
     size_t malicious_size;
-    size_t i;
 
     printf("=== VULN-002: Integer Overflow in Size Calculation ===\n\n");
 
@@ -91,10 +90,17 @@ int main(void) {
     ptr = rampart_alloc(pool, malicious_size);
 
     if (ptr == NULL) {
-        printf("[*] Direct allocation failed (pool too small)\n");
-        printf("    This is expected - pool check catches it.\n");
-        printf("\n[!] HOWEVER: The size calculation itself overflowed!\n");
-        printf("    A larger pool or different overflow value could succeed.\n");
+        rampart_error_t err = rampart_get_last_error(pool);
+        if (err == RAMPART_ERR_INVALID_SIZE) {
+            printf("[FIXED] Allocation rejected with RAMPART_ERR_INVALID_SIZE\n");
+            printf("    Overflow was caught in size calculation!\n");
+        } else if (err == RAMPART_ERR_OUT_OF_MEMORY) {
+            printf("[VULNERABLE] Overflow NOT caught - failed at pool check\n");
+            printf("    Error: RAMPART_ERR_OUT_OF_MEMORY (pool too small)\n");
+            printf("    A larger pool could still be exploited!\n");
+        } else {
+            printf("[?] Unexpected error: %d\n", err);
+        }
     } else {
         printf("[VULNERABLE] Allocation succeeded!\n");
         printf("    Returned ptr: %p\n", ptr);

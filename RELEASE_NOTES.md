@@ -31,9 +31,9 @@ This document tracks security findings, fixes, and release history.
 | VULN-020 | Medium | FIXED | Leak info uses system malloc |
 | VULN-021 | Medium | FIXED | Predictable wipe patterns |
 | VULN-022 | Medium | FIXED | Guard bands not wiped |
-| VULN-023 | Medium | OPEN | Signed config values |
+| VULN-023 | Medium | FIXED | Signed config values |
 
-**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 1 Medium (7 FIXED, 1 MITIGATED, 1 remaining)
+**Summary**: 0 Critical (3 FIXED), 0 High (6 FIXED), 0 Medium (8 FIXED, 1 MITIGATED) - ALL VULNERABILITIES ADDRESSED
 
 *Note: Encryption feature removed in this release. Related vulnerabilities (VULN-001, VULN-010, VULN-014, VULN-016, VULN-017) no longer apply.*
 
@@ -82,12 +82,12 @@ Initial security review identified vulnerabilities. See `docs/SECURITY_AUDIT.md`
 - [x] VULN-011: Add reentrancy protection
 - [x] VULN-006: Safe unlinking with validation
 
-### Phase 3: Hardening
+### Phase 3: Hardening (COMPLETE)
 - [x] VULN-019: Add pool magic validation
 - [x] VULN-020: Secure wipe leak info before free
 - [x] VULN-021: Add random final wipe pass
 - [x] VULN-022: Wipe guard bands on free
-- [ ] VULN-023: Normalize boolean config values
+- [x] VULN-023: Normalize boolean config values
 
 ---
 

@@ -96,9 +96,16 @@ rp_pool_header_t *rp_pool_init(void *pool_memory,
     pool->allocation_count = 0;
     pool->free_block_count = 1;
 
-    /* Copy configuration */
-    pool->strict_thread_mode = config->strict_thread_mode;
-    pool->validate_on_free = config->validate_on_free;
+    /*
+     * Copy configuration.
+     *
+     * VULN-023 fix: Normalize boolean config values to 0 or 1.
+     * This prevents semantic confusion from negative values and ensures
+     * consistent behavior regardless of the non-zero value provided.
+     * Any non-zero input becomes 1, zero stays 0.
+     */
+    pool->strict_thread_mode = (config->strict_thread_mode != 0);
+    pool->validate_on_free = (config->validate_on_free != 0);
     pool->error_callback = config->error_callback;
     pool->callback_user_data = config->callback_user_data;
 

@@ -124,6 +124,12 @@ typedef pthread_t rp_thread_id_t;
  */
 #define RP_FLAG_ALLOCATED  0x01
 
+/**
+ * @def RP_FLAG_PARKED
+ * @brief Block is parked (encrypted)
+ */
+#define RP_FLAG_PARKED     0x02
+
 /* ============================================================================
  * Internal Structures
  * ============================================================================ */
@@ -188,6 +194,16 @@ typedef struct rp_block_header_s {
      * @brief Pointer to next block in address order
      */
     struct rp_block_header_s *next_addr;
+
+    /**
+     * @brief Parking generation counter
+     *
+     * Incremented each time the block is parked. Used to generate
+     * unique nonces for encryption, ensuring the same nonce is never
+     * reused with the same key (even if the block is parked/unparked
+     * multiple times).
+     */
+    unsigned long park_generation;
 } rp_block_header_t;
 
 /*
@@ -292,6 +308,24 @@ typedef struct rp_pool_header_s {
      * @brief Randomized rear guard pattern (per-pool)
      */
     unsigned long guard_rear_pattern;
+
+    /**
+     * @brief Block parking enabled flag
+     */
+    int parking_enabled;
+
+    /**
+     * @brief ChaCha20 encryption key for block parking (256 bits)
+     *
+     * Stored as 8 x 32-bit words (little-endian) for direct use
+     * by the ChaCha20 implementation.
+     */
+    unsigned long parking_key[8];
+
+    /**
+     * @brief Number of currently parked blocks
+     */
+    size_t parked_count;
 } rp_pool_header_t;
 
 /* ============================================================================

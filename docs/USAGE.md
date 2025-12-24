@@ -10,9 +10,10 @@
 6. [Configuration Options](#configuration-options)
 7. [Error Handling](#error-handling)
 8. [Security Features](#security-features)
-9. [Debugging and Diagnostics](#debugging-and-diagnostics)
-10. [Best Practices](#best-practices)
-11. [Common Patterns](#common-patterns)
+9. [Block Parking (Encryption at Rest)](#block-parking-encryption-at-rest)
+10. [Debugging and Diagnostics](#debugging-and-diagnostics)
+11. [Best Practices](#best-practices)
+12. [Common Patterns](#common-patterns)
 
 ## Quick Start
 
@@ -75,13 +76,13 @@ gcc myapp.o -L/path/to/rampart/lib -lrampart -lpthread -o myapp
 ```c
 typedef struct {
     size_t pool_size;           /* Total pool size in bytes */
-    int encryption_enabled;     /* Enable encryption (0 or 1) */
-    unsigned char *encryption_key;  /* Encryption key (if enabled) */
-    size_t encryption_key_size; /* Key size in bytes (16 recommended) */
     int strict_thread_mode;     /* Enforce thread ownership (0 or 1) */
     int validate_on_free;       /* Validate guards on free (0 or 1) */
     rampart_error_callback_t error_callback;  /* Error callback */
     void *callback_user_data;   /* User data for callback */
+    int enable_parking;         /* Enable block parking (0 or 1) */
+    const unsigned char *parking_key;  /* 32-byte parking key (or NULL) */
+    size_t parking_key_len;     /* Parking key length (32 if provided) */
 } rampart_config_t;
 ```
 
@@ -93,10 +94,11 @@ rampart_config_default(&config);
 
 /* Defaults:
  * - pool_size: 0 (must be set)
- * - encryption_enabled: 0
  * - strict_thread_mode: 1
  * - validate_on_free: 1
  * - error_callback: NULL
+ * - enable_parking: 0
+ * - parking_key: NULL (auto-generate)
  */
 ```
 
@@ -133,7 +135,7 @@ if (ptr == NULL) {
 1. Returned memory is always zero-initialized (0x00)
 2. Memory is protected by guard bands
 3. Memory is owned by the calling thread
-4. If encryption is enabled, data will be encrypted when not in use
+4. If parking is enabled, blocks can be encrypted when not in use
 
 ### Checking Available Memory
 
@@ -222,17 +224,24 @@ if (stats.allocation_count > 0) {
 
 ## Configuration Options
 
-### Enabling Encryption
+### Enabling Block Parking
 
 ```c
-unsigned char key[16] = { /* your 128-bit key */ };
-
+/* With auto-generated key */
 rampart_config_t config;
 rampart_config_default(&config);
 config.pool_size = 1024 * 1024;
-config.encryption_enabled = 1;
-config.encryption_key = key;
-config.encryption_key_size = 16;
+config.enable_parking = 1;
+/* parking_key = NULL means auto-generate */
+
+pool = rampart_init(&config);
+
+/* With user-provided key */
+unsigned char key[32] = { /* your 256-bit key */ };
+
+config.enable_parking = 1;
+config.parking_key = key;
+config.parking_key_len = 32;
 
 pool = rampart_init(&config);
 ```
@@ -308,6 +317,110 @@ if (result.corrupted_count > 0) {
 }
 ```
 
+## Block Parking (Encryption at Rest)
+
+Block parking provides limited encryption protection for sensitive data at rest in RAM. When a block is "parked," its contents are encrypted using ChaCha20. When "unparked," the data is decrypted for use.
+
+### Threat Model
+
+**Block parking protects against:**
+
+- Data leaking to swap (when combined with OS memory protection like mlock)
+- Data appearing in core dumps (when combined with MADV_DONTDUMP)
+- Casual memory inspection by unsophisticated attackers
+- Residual data disclosure if memory is freed and reallocated
+
+**Block parking does NOT protect against:**
+
+- Cold boot attacks (the encryption key is in RAM)
+- DMA attacks (the key is in RAM)
+- Root-level attackers who can read /proc/pid/mem
+- Attackers with any mechanism to read your process memory
+- Side-channel attacks on the cipher implementation
+
+**Important:** The encryption key resides in pool memory. Any attacker who can read your encrypted data can also read your key. For genuine memory encryption, use hardware solutions like AMD SEV or Intel TME.
+
+### Basic Usage
+
+```c
+/* Enable parking during pool initialization */
+rampart_config_t config;
+rampart_config_default(&config);
+config.pool_size = 1024 * 1024;
+config.enable_parking = 1;  /* Enable parking */
+
+pool = rampart_init(&config);
+
+/* Allocate and use a block */
+unsigned char *secret = rampart_alloc(pool, 256);
+memcpy(secret, sensitive_data, 256);
+
+/* Park the block when not in use (encrypts data) */
+rampart_park(pool, secret);
+
+/* ... time passes, data is encrypted in memory ... */
+
+/* Unpark when you need to use it again */
+rampart_unpark(pool, secret);
+
+/* Now you can read the decrypted data */
+process_secret(secret);
+
+/* Must unpark before freeing */
+rampart_free(pool, secret);
+```
+
+### API Reference
+
+```c
+/* Park a block (encrypt its contents) */
+rampart_error_t rampart_park(rampart_pool_t *pool, void *ptr);
+
+/* Unpark a block (decrypt its contents) */
+rampart_error_t rampart_unpark(rampart_pool_t *pool, void *ptr);
+
+/* Check if a block is parked */
+int rampart_is_parked(rampart_pool_t *pool, void *ptr);
+```
+
+### Error Conditions
+
+| Error | Cause |
+|-------|-------|
+| `RAMPART_ERR_PARKING_DISABLED` | Pool was not initialized with `enable_parking` |
+| `RAMPART_ERR_BLOCK_PARKED` | Attempted to park an already parked block, or free a parked block |
+| `RAMPART_ERR_NOT_PARKED` | Attempted to unpark a block that is not parked |
+| `RAMPART_ERR_WRONG_THREAD` | Called from wrong thread (if strict_thread_mode enabled) |
+
+### Parked Block Restrictions
+
+When a block is parked:
+
+1. It cannot be freed (must unpark first)
+2. Its contents are encrypted (reading gives encrypted garbage)
+3. Guard bands may show different patterns (validated on unpark)
+
+### When to Use Parking
+
+Good use cases:
+
+- Long-lived secrets (API keys, credentials, encryption keys)
+- Sensitive data that sits idle between operations
+- Data that should be protected during application sleep/hibernate
+
+Not needed for:
+
+- Short-lived temporary buffers (secure wipe on free is sufficient)
+- Data that is constantly accessed (parking overhead is wasteful)
+- Pools where all data is equally sensitive (just protect the whole pool)
+
+### Cipher Details
+
+- **Algorithm:** ChaCha20 (RFC 8439)
+- **Key size:** 256 bits (32 bytes)
+- **Nonce:** Derived from block address XOR allocation counter XOR pool salt
+- **Properties:** Timing-safe (no lookup tables), stream cipher (arbitrary-length data)
+
 ## Debugging and Diagnostics
 
 ### Pool Statistics
@@ -336,7 +449,7 @@ rampart_get_block_info(pool, ptr, &info);
 printf("Block size:    %zu bytes\n", info.user_size);
 printf("Total size:    %zu bytes\n", info.total_size);
 printf("Owner thread:  %lu\n", (unsigned long)info.owner_thread);
-printf("Encrypted:     %s\n", info.is_encrypted ? "yes" : "no");
+printf("Parked:        %s\n", rampart_is_parked(pool, ptr) ? "yes" : "no");
 printf("Front guard:   %s\n", info.front_guard_valid ? "OK" : "CORRUPTED");
 printf("Rear guard:    %s\n", info.rear_guard_valid ? "OK" : "CORRUPTED");
 ```
@@ -378,11 +491,12 @@ This catches security violations early.
 #endif
 ```
 
-### 6. Secure Your Encryption Key
+### 6. Understand Parking Limitations
 
-- Don't hardcode keys
-- Consider secure key storage mechanisms
-- Clear keys from memory when done
+- Parking encrypts data in RAM but the key is also in RAM
+- For true memory encryption, use hardware solutions (AMD SEV, Intel TME)
+- Only use parking for long-lived secrets that sit idle
+- If you provide your own key, clear it from memory after init
 
 ### 7. Check for Leaks Before Shutdown
 
@@ -429,21 +543,27 @@ void process_data(rampart_pool_t *pool) {
 
 ```c
 /* Separate pools for different security levels */
-rampart_pool_t *sensitive_pool;  /* Encrypted */
-rampart_pool_t *general_pool;    /* Not encrypted */
+rampart_pool_t *sensitive_pool;  /* With parking enabled */
+rampart_pool_t *general_pool;    /* Standard pool */
 
 /* Sensitive pool configuration */
-config.encryption_enabled = 1;
-config.encryption_key = secret_key;
+rampart_config_default(&config);
+config.pool_size = 1024 * 1024;
+config.enable_parking = 1;
 sensitive_pool = rampart_init(&config);
 
 /* General pool configuration */
-config.encryption_enabled = 0;
+rampart_config_default(&config);
+config.pool_size = 10 * 1024 * 1024;
+config.enable_parking = 0;
 general_pool = rampart_init(&config);
 
 /* Allocate based on data sensitivity */
 void *password = rampart_alloc(sensitive_pool, 256);
 void *buffer = rampart_alloc(general_pool, 4096);
+
+/* Park sensitive data when not in use */
+rampart_park(sensitive_pool, password);
 ```
 
 ### Graceful Degradation

@@ -26,6 +26,7 @@
 #include "internal/rp_block.h"
 #include "internal/rp_thread.h"
 #include "internal/rp_wipe.h"
+#include "internal/rp_crypto.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -77,7 +78,10 @@ static const char *ERROR_STRINGS[] = {
     "Double free",                          /* RAMPART_ERR_DOUBLE_FREE = -7 */
     "Pool not initialized",                 /* RAMPART_ERR_NOT_INITIALIZED = -8 */
     "Invalid configuration",                /* RAMPART_ERR_INVALID_CONFIG = -9 */
-    "Internal error"                        /* RAMPART_ERR_INTERNAL = -10 */
+    "Internal error",                       /* RAMPART_ERR_INTERNAL = -10 */
+    "Block is parked",                      /* RAMPART_ERR_BLOCK_PARKED = -11 */
+    "Block is not parked",                  /* RAMPART_ERR_NOT_PARKED = -12 */
+    "Parking not enabled"                   /* RAMPART_ERR_PARKING_DISABLED = -13 */
 };
 
 #define NUM_ERROR_STRINGS (sizeof(ERROR_STRINGS) / sizeof(ERROR_STRINGS[0]))
@@ -206,6 +210,9 @@ rampart_error_t rampart_config_default(rampart_config_t *config) {
     config->validate_on_free = 1;
     config->error_callback = NULL;
     config->callback_user_data = NULL;
+    config->enable_parking = 0;
+    config->parking_key = NULL;
+    config->parking_key_len = 0;
 
     return RAMPART_OK;
 }
@@ -422,6 +429,13 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
         }
     }
 
+    /* Check if block is parked (encrypted). Must unpark before freeing. */
+    if (block->flags & RP_FLAG_PARKED) {
+        invoke_callback(p, RAMPART_ERR_BLOCK_PARKED, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_BLOCK_PARKED;
+    }
+
     /*
      * Always validate guard bands on free (VULN-013 fix).
      *
@@ -446,6 +460,302 @@ rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr) {
     rp_pool_unlock(p);
 
     return err;
+}
+
+/* ============================================================================
+ * Block Parking Functions (Encryption at Rest)
+ * ============================================================================
+ *
+ * SECURITY NOTICE:
+ *
+ * Block parking encrypts data in RAM using ChaCha20 but provides LIMITED
+ * protection against sophisticated attackers. The encryption key resides
+ * in pool memory. Any attacker who can read your encrypted data can also
+ * read your key.
+ *
+ * This feature protects against:
+ * - Data leaking to swap (when combined with mlock)
+ * - Data in core dumps (when combined with MADV_DONTDUMP)
+ * - Casual memory inspection
+ *
+ * This feature does NOT protect against:
+ * - Cold boot attacks
+ * - DMA attacks
+ * - Root-level attackers with memory read access
+ * - Attackers who can read /proc/pid/mem or equivalent
+ *
+ * For genuine memory encryption, use hardware solutions (AMD SEV, Intel TME).
+ */
+
+rampart_error_t rampart_park(rampart_pool_t *pool, void *ptr) {
+    rp_pool_header_t *p;
+    rp_block_header_t *block;
+    rp_chacha20_ctx_t ctx;
+    unsigned char nonce[RP_CHACHA20_NONCE_SIZE];
+    rampart_error_t err;
+    void *user_ptr;
+
+    if (ptr == NULL) {
+        return RAMPART_ERR_NULL_PARAM;
+    }
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
+    }
+
+    p = (rp_pool_header_t *)pool;
+
+    /* Check if parking is enabled */
+    if (!p->parking_enabled) {
+        return RAMPART_ERR_PARKING_DISABLED;
+    }
+
+    rp_pool_lock(p);
+
+    /* Get block header with bounds validation */
+    block = rp_block_from_user_ptr_safe(p, ptr);
+    if (block == NULL) {
+        invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
+
+    /* Validate block magic */
+    err = rp_block_validate_magic(block);
+    if (err != RAMPART_OK) {
+        invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
+
+    /* Check if already parked */
+    if (block->flags & RP_FLAG_PARKED) {
+        rp_pool_unlock(p);
+        return RAMPART_ERR_BLOCK_PARKED;
+    }
+
+    /* Verify thread ownership if strict mode enabled */
+    if (p->strict_thread_mode) {
+        err = rp_block_verify_canary(p, block);
+        if (err != RAMPART_OK) {
+            invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+            rp_pool_unlock(p);
+            return RAMPART_ERR_INVALID_BLOCK;
+        }
+
+        err = rp_thread_verify_owner(block);
+        if (err != RAMPART_OK) {
+            invoke_callback(p, RAMPART_ERR_WRONG_THREAD, ptr);
+            rp_pool_unlock(p);
+            return RAMPART_ERR_WRONG_THREAD;
+        }
+    }
+
+    /* Validate guard bands before parking */
+    err = rp_block_validate_guards(p, block);
+    if (err != RAMPART_OK) {
+        invoke_callback(p, RAMPART_ERR_GUARD_CORRUPTED, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_GUARD_CORRUPTED;
+    }
+
+    /* Increment generation counter for unique nonce */
+    block->park_generation++;
+
+    /* Generate nonce for this parking operation */
+    err = rp_crypto_generate_block_nonce(p, block, block->park_generation,
+                                          nonce);
+    if (err != RAMPART_OK) {
+        rp_pool_unlock(p);
+        return err;
+    }
+
+    /* Initialize ChaCha20 context with pool key */
+    ctx.initialized = 0;
+    ctx.key[0] = p->parking_key[0];
+    ctx.key[1] = p->parking_key[1];
+    ctx.key[2] = p->parking_key[2];
+    ctx.key[3] = p->parking_key[3];
+    ctx.key[4] = p->parking_key[4];
+    ctx.key[5] = p->parking_key[5];
+    ctx.key[6] = p->parking_key[6];
+    ctx.key[7] = p->parking_key[7];
+    ctx.initialized = 1;
+
+    /* Get user data pointer */
+    user_ptr = rp_block_get_user_ptr(block);
+
+    /* Encrypt user data in place (ChaCha20 XOR) */
+    err = rp_chacha20_crypt(&ctx, nonce, RP_CHACHA20_NONCE_SIZE, 0,
+                             (unsigned char *)user_ptr, block->user_size);
+
+    /* Wipe context from stack */
+    rp_chacha20_wipe(&ctx);
+    rp_wipe_memory(nonce, sizeof(nonce));
+
+    if (err != RAMPART_OK) {
+        rp_pool_unlock(p);
+        return err;
+    }
+
+    /* Mark block as parked */
+    block->flags |= RP_FLAG_PARKED;
+    p->parked_count++;
+
+    rp_pool_unlock(p);
+
+    return RAMPART_OK;
+}
+
+rampart_error_t rampart_unpark(rampart_pool_t *pool, void *ptr) {
+    rp_pool_header_t *p;
+    rp_block_header_t *block;
+    rp_chacha20_ctx_t ctx;
+    unsigned char nonce[RP_CHACHA20_NONCE_SIZE];
+    rampart_error_t err;
+    void *user_ptr;
+
+    if (ptr == NULL) {
+        return RAMPART_ERR_NULL_PARAM;
+    }
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return RAMPART_ERR_NOT_INITIALIZED;
+    }
+
+    p = (rp_pool_header_t *)pool;
+
+    /* Check if parking is enabled */
+    if (!p->parking_enabled) {
+        return RAMPART_ERR_PARKING_DISABLED;
+    }
+
+    rp_pool_lock(p);
+
+    /* Get block header with bounds validation */
+    block = rp_block_from_user_ptr_safe(p, ptr);
+    if (block == NULL) {
+        invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
+
+    /* Validate block magic */
+    err = rp_block_validate_magic(block);
+    if (err != RAMPART_OK) {
+        invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+        rp_pool_unlock(p);
+        return RAMPART_ERR_INVALID_BLOCK;
+    }
+
+    /* Check if block is actually parked */
+    if (!(block->flags & RP_FLAG_PARKED)) {
+        rp_pool_unlock(p);
+        return RAMPART_ERR_NOT_PARKED;
+    }
+
+    /* Verify thread ownership if strict mode enabled */
+    if (p->strict_thread_mode) {
+        err = rp_block_verify_canary(p, block);
+        if (err != RAMPART_OK) {
+            invoke_callback(p, RAMPART_ERR_INVALID_BLOCK, ptr);
+            rp_pool_unlock(p);
+            return RAMPART_ERR_INVALID_BLOCK;
+        }
+
+        err = rp_thread_verify_owner(block);
+        if (err != RAMPART_OK) {
+            invoke_callback(p, RAMPART_ERR_WRONG_THREAD, ptr);
+            rp_pool_unlock(p);
+            return RAMPART_ERR_WRONG_THREAD;
+        }
+    }
+
+    /* Generate the same nonce used for parking (uses stored generation) */
+    err = rp_crypto_generate_block_nonce(p, block, block->park_generation,
+                                          nonce);
+    if (err != RAMPART_OK) {
+        rp_pool_unlock(p);
+        return err;
+    }
+
+    /* Initialize ChaCha20 context with pool key */
+    ctx.initialized = 0;
+    ctx.key[0] = p->parking_key[0];
+    ctx.key[1] = p->parking_key[1];
+    ctx.key[2] = p->parking_key[2];
+    ctx.key[3] = p->parking_key[3];
+    ctx.key[4] = p->parking_key[4];
+    ctx.key[5] = p->parking_key[5];
+    ctx.key[6] = p->parking_key[6];
+    ctx.key[7] = p->parking_key[7];
+    ctx.initialized = 1;
+
+    /* Get user data pointer */
+    user_ptr = rp_block_get_user_ptr(block);
+
+    /* Decrypt user data in place (ChaCha20 XOR is symmetric) */
+    err = rp_chacha20_crypt(&ctx, nonce, RP_CHACHA20_NONCE_SIZE, 0,
+                             (unsigned char *)user_ptr, block->user_size);
+
+    /* Wipe context from stack */
+    rp_chacha20_wipe(&ctx);
+    rp_wipe_memory(nonce, sizeof(nonce));
+
+    if (err != RAMPART_OK) {
+        rp_pool_unlock(p);
+        return err;
+    }
+
+    /* Clear parked flag */
+    block->flags &= (unsigned int)~RP_FLAG_PARKED;
+    p->parked_count--;
+
+    rp_pool_unlock(p);
+
+    return RAMPART_OK;
+}
+
+int rampart_is_parked(rampart_pool_t *pool, void *ptr) {
+    rp_pool_header_t *p;
+    rp_block_header_t *block;
+    rampart_error_t err;
+    int result;
+
+    if (ptr == NULL) {
+        return 0;
+    }
+
+    /* VULN-019 fix: Validate pool before accessing any fields */
+    if (!validate_pool(pool)) {
+        return 0;
+    }
+
+    p = (rp_pool_header_t *)pool;
+
+    rp_pool_lock(p);
+
+    /* Get block header with bounds validation */
+    block = rp_block_from_user_ptr_safe(p, ptr);
+    if (block == NULL) {
+        rp_pool_unlock(p);
+        return 0;
+    }
+
+    /* Validate block magic */
+    err = rp_block_validate_magic(block);
+    if (err != RAMPART_OK) {
+        rp_pool_unlock(p);
+        return 0;
+    }
+
+    result = (block->flags & RP_FLAG_PARKED) ? 1 : 0;
+
+    rp_pool_unlock(p);
+
+    return result;
 }
 
 /* ============================================================================

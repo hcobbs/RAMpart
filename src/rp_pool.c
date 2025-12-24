@@ -38,10 +38,14 @@
 /**
  * rp_generate_random_ulong - Generate a random unsigned long
  *
- * Uses /dev/urandom on POSIX systems. Falls back to address XOR time
- * if urandom is unavailable.
+ * Uses /dev/urandom exclusively. Returns 0 on failure.
  *
- * @return Random unsigned long value
+ * VULN-002 fix: Removed weak PRNG fallback. There is no acceptable
+ * fallback for security-critical randomness. If urandom is unavailable,
+ * guard patterns will use static fallback values, which is honestly
+ * communicated rather than pretending weak randomness is acceptable.
+ *
+ * @return Random unsigned long value, or 0 on failure
  */
 static unsigned long rp_generate_random_ulong(void) {
     unsigned long result = 0;
@@ -49,18 +53,22 @@ static unsigned long rp_generate_random_ulong(void) {
 
     urandom = fopen("/dev/urandom", "rb");
     if (urandom != NULL) {
-        if (fread(&result, sizeof(result), 1, urandom) != 1) {
-            result = 0;  /* Read failed, will use fallback */
+        if (fread(&result, sizeof(result), 1, urandom) == 1) {
+            fclose(urandom);
+            return result;
         }
         fclose(urandom);
     }
 
-    /* Fallback: use address + time (weak but better than nothing) */
-    if (result == 0) {
-        result = (unsigned long)(size_t)&result ^ (unsigned long)time(NULL);
-    }
-
-    return result;
+    /*
+     * VULN-002 fix: No fallback PRNG.
+     *
+     * Return 0 to signal failure. The caller (rp_pool_init) will
+     * fall back to static guard patterns, which is the honest choice.
+     * A predictable "random" value that looks random is worse than
+     * a static value that is clearly static.
+     */
+    return 0;
 }
 
 /* ============================================================================

@@ -115,6 +115,9 @@ static void test_error_strings(void) {
     str = rampart_error_string(RAMPART_ERR_PARKING_DISABLED);
     TEST_ASSERT_NOT_NULL(str);
 
+    str = rampart_error_string(RAMPART_ERR_ENTROPY_SOURCE);
+    TEST_ASSERT_NOT_NULL(str);
+
     /* Unknown error should still return something */
     str = rampart_error_string((rampart_error_t)9999);
     TEST_ASSERT_NOT_NULL(str);

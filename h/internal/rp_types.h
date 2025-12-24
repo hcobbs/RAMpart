@@ -198,12 +198,21 @@ typedef struct rp_block_header_s {
     /**
      * @brief Parking generation counter
      *
-     * Incremented each time the block is parked. Used to generate
-     * unique nonces for encryption, ensuring the same nonce is never
-     * reused with the same key (even if the block is parked/unparked
-     * multiple times).
+     * Incremented each time the block is parked. Used as part of
+     * nonce generation to ensure uniqueness.
      */
     unsigned long park_generation;
+
+    /**
+     * @brief Stored nonce for parked blocks (VULN-004 fix)
+     *
+     * The nonce used to encrypt this block is stored here when parked.
+     * Since the nonce now includes random data, it cannot be regenerated
+     * for decryption. The unpark operation reads this stored nonce.
+     *
+     * Size: 12 bytes (RP_CHACHA20_NONCE_SIZE), but stored as 16 for alignment.
+     */
+    unsigned char park_nonce[16];
 } rp_block_header_t;
 
 /*

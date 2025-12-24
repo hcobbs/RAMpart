@@ -58,7 +58,7 @@ RAMpart is a secure memory pool management library designed for applications req
         |
         +---> block.c         Block metadata, guard band management
         |
-        +---> crypto.c        Feistel cipher implementation
+        +---> crypto.c        ChaCha20 stream cipher (RFC 8439)
         |
         +---> wipe.c          Secure memory wiping
         |
@@ -72,7 +72,7 @@ RAMpart is a secure memory pool management library designed for applications req
 | `rampart` | Public API, pool initialization/shutdown, allocation routing |
 | `pool` | Free list management, worst-fit search, block splitting/coalescing |
 | `block` | Block header management, guard band initialization and validation |
-| `crypto` | Feistel block cipher, key management, encrypt/decrypt operations |
+| `crypto` | ChaCha20 stream cipher (RFC 8439), key management, encrypt/decrypt |
 | `wipe` | Secure overwrite patterns, multi-pass wiping |
 | `thread_guard` | Thread ID capture, ownership validation, cross-thread detection |
 
@@ -229,31 +229,45 @@ Each block records the thread ID of its allocating thread. Access from other thr
 
 **Note**: Direct pointer access bypasses thread checks. Use accessor functions for full enforcement.
 
-### Encryption at Rest
+### Block Parking (Encryption at Rest)
 
-When enabled, user data is encrypted while stored in the pool.
+When enabled, blocks can be "parked" to encrypt their contents in memory
+and "unparked" to decrypt them for use.
 
-**Cipher**: Custom 16-round Feistel network
-- Block size: 8 bytes
-- Key size: 16 bytes (128-bit)
+**Cipher**: ChaCha20 stream cipher (RFC 8439)
+- Key size: 32 bytes (256-bit)
+- Nonce size: 12 bytes (generated per-park operation)
+- No lookup tables (timing-safe)
 - No external dependencies
 
 **Key Management**:
-- Key provided at pool initialization
-- Key stored in pool header (consider secure memory for key in production)
+- Key provided at pool initialization, or auto-generated from /dev/urandom
+- Key stored in pool header
 - Same key used for all blocks in pool
+- Key generation fails if /dev/urandom is unavailable (no weak fallback)
 
-**Encryption Points**:
-- Data encrypted after write operations (if using accessor functions)
-- Data decrypted before read operations (if using accessor functions)
-- Direct pointer access returns encrypted data (by design)
+**Nonce Generation**:
+- Each park operation generates a unique nonce from:
+  - 8 bytes of fresh randomness from /dev/urandom
+  - 4-byte generation counter (increments per-park)
+- Nonce reuse is prevented by the random component
+
+**Parking Points**:
+- `rampart_park()`: Encrypts block contents, sets parked flag
+- `rampart_unpark()`: Decrypts block contents, clears parked flag
+- Parked blocks cannot be freed or accessed until unparked
+
+**Security Limitations**:
+Block parking protects against casual memory inspection, data in core dumps,
+and data leaking to swap (when OS memory protection is used). It does NOT
+protect against attackers with memory read access (the key is in pool memory).
 
 **Configuration**:
 ```c
 rampart_config_t config;
-config.encryption_enabled = 1;
-config.encryption_key = user_provided_key;
-config.encryption_key_size = 16;
+config.enable_parking = 1;
+config.parking_key = user_provided_key;  /* or NULL for auto-generate */
+config.parking_key_len = 32;
 ```
 
 ### Secure Wiping

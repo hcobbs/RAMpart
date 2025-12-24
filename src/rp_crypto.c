@@ -188,8 +188,6 @@ static void chacha20_block(const rp_chacha20_ctx_t *ctx,
 
 rampart_error_t rp_crypto_generate_key(unsigned char *key, size_t key_len) {
     FILE *urandom;
-    size_t i;
-    unsigned long state;
 
     if (key == NULL) {
         return RAMPART_ERR_NULL_PARAM;
@@ -199,29 +197,24 @@ rampart_error_t rp_crypto_generate_key(unsigned char *key, size_t key_len) {
         return RAMPART_ERR_INVALID_SIZE;
     }
 
-    /* Try /dev/urandom first */
-    urandom = fopen("/dev/urandom", "rb");
-    if (urandom != NULL) {
-        if (fread(key, 1, key_len, urandom) == key_len) {
-            fclose(urandom);
-            return RAMPART_OK;
-        }
-        fclose(urandom);
-    }
-
     /*
-     * Fallback: PRNG seeded with time and key address.
-     * Not cryptographically ideal but acceptable for the limited
-     * threat model of this feature.
+     * VULN-001 fix: Use /dev/urandom exclusively.
+     *
+     * There is no acceptable fallback for cryptographic key generation.
+     * If /dev/urandom is unavailable, fail loudly rather than silently
+     * generating a predictable key that provides false security.
      */
-    state = (unsigned long)(size_t)key ^ (unsigned long)time(NULL);
-    state ^= (unsigned long)clock();
-
-    for (i = 0; i < key_len; i++) {
-        state = state * 6364136223846793005UL + 1442695040888963407UL;
-        key[i] = (unsigned char)((state >> 32) & 0xFF);
+    urandom = fopen("/dev/urandom", "rb");
+    if (urandom == NULL) {
+        return RAMPART_ERR_ENTROPY_SOURCE;
     }
 
+    if (fread(key, 1, key_len, urandom) != key_len) {
+        fclose(urandom);
+        return RAMPART_ERR_ENTROPY_SOURCE;
+    }
+
+    fclose(urandom);
     return RAMPART_OK;
 }
 
@@ -345,34 +338,44 @@ rampart_error_t rp_crypto_generate_block_nonce(const rp_pool_header_t *pool,
                                                 const rp_block_header_t *block,
                                                 unsigned long generation,
                                                 unsigned char *nonce) {
-    unsigned long addr_hash;
-    unsigned long pool_salt;
+    FILE *urandom;
 
-    if (pool == NULL || block == NULL || nonce == NULL) {
+    (void)pool;   /* Unused after VULN-004 fix */
+    (void)block;  /* Unused after VULN-004 fix */
+
+    if (nonce == NULL) {
         return RAMPART_ERR_NULL_PARAM;
     }
 
     /*
-     * Generate a unique nonce from:
-     * - Block address (unique within pool)
-     * - Generation counter (unique across time)
-     * - Pool guard pattern (unique per pool)
+     * VULN-004 fix: Use fresh randomness for nonce generation.
      *
-     * Layout (12 bytes):
-     * [0-3]  = Block address hash XOR pool salt
-     * [4-7]  = Generation counter
-     * [8-11] = Pool guard front pattern
+     * Previous implementation derived the nonce from predictable values:
+     * block address, generation counter, and pool guard patterns. If any
+     * of these were known or predictable, nonce reuse could occur.
+     *
+     * New approach:
+     * - [0-7]  = 8 bytes of fresh randomness from /dev/urandom
+     * - [8-11] = Generation counter (provides ordering/uniqueness guarantee)
+     *
+     * The random component ensures nonce uniqueness even if the generation
+     * counter wraps or is predicted. The counter provides a backup uniqueness
+     * guarantee if urandom produces a collision (astronomically unlikely).
      */
-    addr_hash = (unsigned long)(size_t)block;
-    pool_salt = pool->guard_front_pattern ^ pool->guard_rear_pattern;
+    urandom = fopen("/dev/urandom", "rb");
+    if (urandom == NULL) {
+        return RAMPART_ERR_ENTROPY_SOURCE;
+    }
 
-    /* Mix address with pool salt */
-    addr_hash ^= pool_salt;
-    addr_hash = (addr_hash * 2654435761UL) & U32_MASK;  /* Knuth multiplicative hash */
+    /* Read 8 bytes of randomness for nonce[0-7] */
+    if (fread(nonce, 1, 8, urandom) != 8) {
+        fclose(urandom);
+        return RAMPART_ERR_ENTROPY_SOURCE;
+    }
+    fclose(urandom);
 
-    store32_le(nonce, addr_hash);
-    store32_le(nonce + 4, generation);
-    store32_le(nonce + 8, pool->guard_front_pattern);
+    /* Append generation counter as nonce[8-11] */
+    store32_le(nonce + 8, generation);
 
     return RAMPART_OK;
 }

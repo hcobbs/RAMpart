@@ -81,7 +81,8 @@ static const char *ERROR_STRINGS[] = {
     "Internal error",                       /* RAMPART_ERR_INTERNAL = -10 */
     "Block is parked",                      /* RAMPART_ERR_BLOCK_PARKED = -11 */
     "Block is not parked",                  /* RAMPART_ERR_NOT_PARKED = -12 */
-    "Parking not enabled"                   /* RAMPART_ERR_PARKING_DISABLED = -13 */
+    "Parking not enabled",                  /* RAMPART_ERR_PARKING_DISABLED = -13 */
+    "Entropy source unavailable"            /* RAMPART_ERR_ENTROPY_SOURCE = -14 */
 };
 
 #define NUM_ERROR_STRINGS (sizeof(ERROR_STRINGS) / sizeof(ERROR_STRINGS[0]))
@@ -571,6 +572,14 @@ rampart_error_t rampart_park(rampart_pool_t *pool, void *ptr) {
         return err;
     }
 
+    /*
+     * VULN-004 fix: Store nonce in block header.
+     *
+     * Since the nonce now includes random data, it cannot be regenerated
+     * for decryption. We store it in the block header so unpark can use it.
+     */
+    memcpy(block->park_nonce, nonce, RP_CHACHA20_NONCE_SIZE);
+
     /* Initialize ChaCha20 context with pool key */
     ctx.initialized = 0;
     ctx.key[0] = p->parking_key[0];
@@ -673,13 +682,13 @@ rampart_error_t rampart_unpark(rampart_pool_t *pool, void *ptr) {
         }
     }
 
-    /* Generate the same nonce used for parking (uses stored generation) */
-    err = rp_crypto_generate_block_nonce(p, block, block->park_generation,
-                                          nonce);
-    if (err != RAMPART_OK) {
-        rp_pool_unlock(p);
-        return err;
-    }
+    /*
+     * VULN-004 fix: Use stored nonce from block header.
+     *
+     * The nonce was stored during park() because it contains random data
+     * that cannot be regenerated. We retrieve it here for decryption.
+     */
+    memcpy(nonce, block->park_nonce, RP_CHACHA20_NONCE_SIZE);
 
     /* Initialize ChaCha20 context with pool key */
     ctx.initialized = 0;
@@ -709,8 +718,9 @@ rampart_error_t rampart_unpark(rampart_pool_t *pool, void *ptr) {
         return err;
     }
 
-    /* Clear parked flag */
+    /* Clear parked flag and wipe stored nonce */
     block->flags &= (unsigned int)~RP_FLAG_PARKED;
+    rp_wipe_memory(block->park_nonce, sizeof(block->park_nonce));
     p->parked_count--;
 
     rp_pool_unlock(p);

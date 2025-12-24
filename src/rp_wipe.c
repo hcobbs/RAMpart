@@ -25,7 +25,6 @@
 #include "internal/rp_types.h"
 #include <string.h>
 #include <stdio.h>
-#include <time.h>
 
 /* MSVC intrinsics for memory barrier */
 #if defined(_MSC_VER)
@@ -76,8 +75,14 @@ void rp_wipe_memory_barrier(void) {
 /**
  * rp_wipe_fill_random - Fill memory with random data
  *
- * Uses /dev/urandom for high-quality random data. Falls back to a simple
- * PRNG if /dev/urandom is unavailable.
+ * Uses /dev/urandom for high-quality random data. If unavailable,
+ * falls back to a static pattern rather than weak pseudo-randomness.
+ *
+ * VULN-005 fix: Removed weak PRNG fallback. A predictable "random"
+ * pattern is worse than an honest static pattern because it creates
+ * a false sense of security. If urandom is unavailable, we use the
+ * alternating pattern (0xAA) which is still effective for wiping
+ * but does not pretend to be random.
  *
  * @param ptr   Pointer to memory region
  * @param size  Size of region in bytes
@@ -86,7 +91,6 @@ static void rp_wipe_fill_random(void *ptr, size_t size) {
     volatile unsigned char *p;
     FILE *urandom;
     size_t i;
-    unsigned long state;
 
     if (ptr == NULL || size == 0) {
         return;
@@ -94,7 +98,7 @@ static void rp_wipe_fill_random(void *ptr, size_t size) {
 
     p = (volatile unsigned char *)ptr;
 
-    /* Try /dev/urandom first */
+    /* Try /dev/urandom for true randomness */
     urandom = fopen("/dev/urandom", "rb");
     if (urandom != NULL) {
         /*
@@ -109,16 +113,15 @@ static void rp_wipe_fill_random(void *ptr, size_t size) {
     }
 
     /*
-     * Fallback: Simple PRNG based on address, time, and index.
-     * This is not cryptographically secure but still unpredictable
-     * enough to prevent pattern-based forensic detection.
+     * VULN-005 fix: No weak PRNG fallback.
+     *
+     * Use static alternating pattern instead of predictable "random" data.
+     * This is honest: we're wiping the memory, just not with randomness.
+     * The data is still destroyed, forensic analysis will see 0xAA not
+     * the original data, and we don't create false confidence.
      */
-    state = (unsigned long)(size_t)ptr ^ (unsigned long)time(NULL);
-
     for (i = 0; i < size; i++) {
-        /* Simple LCG: state = state * 1103515245 + 12345 */
-        state = state * 1103515245UL + 12345UL;
-        p[i] = (unsigned char)((state >> 16) & 0xFF);
+        p[i] = RP_WIPE_PATTERN_3;  /* 0xAA */
     }
 }
 

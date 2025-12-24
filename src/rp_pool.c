@@ -25,6 +25,7 @@
 #include "internal/rp_block.h"
 #include "internal/rp_thread.h"
 #include "internal/rp_wipe.h"
+#include "internal/rp_crypto.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -122,6 +123,63 @@ rp_pool_header_t *rp_pool_init(void *pool_memory,
         pool->guard_rear_pattern = RP_GUARD_REAR_PATTERN;
     }
 
+    /*
+     * Initialize parking configuration.
+     *
+     * If parking is enabled, set up the encryption key. If a key is
+     * provided, copy it. Otherwise, generate a random key.
+     */
+    pool->parking_enabled = (config->enable_parking != 0);
+    pool->parked_count = 0;
+
+    if (pool->parking_enabled) {
+        if (config->parking_key != NULL) {
+            /* Validate key length */
+            if (config->parking_key_len != RP_CHACHA20_KEY_SIZE) {
+                return NULL;  /* Invalid key size */
+            }
+
+            /* Copy user-provided key as 8 x 32-bit little-endian words */
+            {
+                int i;
+                for (i = 0; i < 8; i++) {
+                    const unsigned char *p = config->parking_key + (i * 4);
+                    pool->parking_key[i] = ((unsigned long)p[0]) |
+                                            ((unsigned long)p[1] << 8) |
+                                            ((unsigned long)p[2] << 16) |
+                                            ((unsigned long)p[3] << 24);
+                }
+            }
+        } else {
+            /* Generate random key */
+            unsigned char key_bytes[RP_CHACHA20_KEY_SIZE];
+            int i;
+
+            err = rp_crypto_generate_key(key_bytes, RP_CHACHA20_KEY_SIZE);
+            if (err != RAMPART_OK) {
+                return NULL;  /* Key generation failed */
+            }
+
+            /* Convert to 32-bit words */
+            for (i = 0; i < 8; i++) {
+                const unsigned char *p = key_bytes + (i * 4);
+                pool->parking_key[i] = ((unsigned long)p[0]) |
+                                        ((unsigned long)p[1] << 8) |
+                                        ((unsigned long)p[2] << 16) |
+                                        ((unsigned long)p[3] << 24);
+            }
+
+            /* Wipe temporary key bytes */
+            rp_wipe_memory(key_bytes, sizeof(key_bytes));
+        }
+    } else {
+        /* Clear key storage when parking disabled */
+        int i;
+        for (i = 0; i < 8; i++) {
+            pool->parking_key[i] = 0;
+        }
+    }
+
     /* Initialize mutex */
     err = rp_mutex_init(&pool->mutex);
     if (err != RAMPART_OK) {
@@ -156,6 +214,12 @@ void rp_pool_destroy(rp_pool_header_t *pool) {
 
     /* Save total_size before any wiping (prevents use-after-wipe) */
     total_size = pool->total_size;
+
+    /* Wipe parking key separately with secure multi-pass wipe */
+    if (pool->parking_enabled) {
+        rp_wipe_memory(pool->parking_key, sizeof(pool->parking_key));
+        pool->parking_enabled = 0;
+    }
 
     /* Destroy mutex */
     rp_mutex_destroy(&pool->mutex);

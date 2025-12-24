@@ -43,6 +43,7 @@ extern void run_wipe_tests(void);
 extern void run_guard_tests(void);
 extern void run_thread_tests(void);
 extern void run_integration_tests(void);
+extern void register_parking_tests(void);
 
 /* ============================================================================
  * Version and Smoke Tests
@@ -100,6 +101,18 @@ static void test_error_strings(void) {
     TEST_ASSERT_NOT_NULL(str);
 
     str = rampart_error_string(RAMPART_ERR_INVALID_CONFIG);
+    TEST_ASSERT_NOT_NULL(str);
+
+    str = rampart_error_string(RAMPART_ERR_INTERNAL);
+    TEST_ASSERT_NOT_NULL(str);
+
+    str = rampart_error_string(RAMPART_ERR_BLOCK_PARKED);
+    TEST_ASSERT_NOT_NULL(str);
+
+    str = rampart_error_string(RAMPART_ERR_NOT_PARKED);
+    TEST_ASSERT_NOT_NULL(str);
+
+    str = rampart_error_string(RAMPART_ERR_PARKING_DISABLED);
     TEST_ASSERT_NOT_NULL(str);
 
     /* Unknown error should still return something */
@@ -1055,6 +1068,8 @@ int main(int argc, char *argv[]) {
     run_guard_tests();
 
     run_thread_tests();
+
+    register_parking_tests();
 
     /* Print grand summary with totals across all suites */
     TEST_PRINT_GRAND_SUMMARY();

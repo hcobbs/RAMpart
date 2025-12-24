@@ -207,7 +207,30 @@ typedef enum rampart_error_e {
      * Returned when an unexpected internal condition occurs.
      * This should not happen in normal operation.
      */
-    RAMPART_ERR_INTERNAL = -10
+    RAMPART_ERR_INTERNAL = -10,
+
+    /**
+     * @brief Block is currently parked (encrypted)
+     *
+     * Returned when attempting to free or access a parked block
+     * without first unparking it.
+     */
+    RAMPART_ERR_BLOCK_PARKED = -11,
+
+    /**
+     * @brief Block is not parked
+     *
+     * Returned when attempting to unpark a block that is not parked.
+     */
+    RAMPART_ERR_NOT_PARKED = -12,
+
+    /**
+     * @brief Parking not enabled
+     *
+     * Returned when attempting park/unpark operations on a pool
+     * that was not initialized with enable_parking set.
+     */
+    RAMPART_ERR_PARKING_DISABLED = -13
 } rampart_error_t;
 
 /* ============================================================================
@@ -333,6 +356,58 @@ typedef struct rampart_config_s {
      * Default: NULL
      */
     void *callback_user_data;
+
+    /**
+     * @brief Enable secure block parking
+     *
+     * When enabled, blocks can be "parked" to encrypt their contents
+     * in memory and "unparked" to decrypt them for use. This provides
+     * limited protection for sensitive data at rest in RAM.
+     *
+     * @warning SECURITY LIMITATIONS: Block parking protects against:
+     *          - Data leaking to swap (when OS memory protection is used)
+     *          - Data in core dumps
+     *          - Casual memory inspection
+     *
+     *          Block parking does NOT protect against:
+     *          - Cold boot attacks (encryption key is in RAM)
+     *          - DMA attacks
+     *          - Root-level attackers with memory read access
+     *          - Attackers who can read /proc/pid/mem or equivalent
+     *
+     *          The encryption key resides in pool memory. Any attacker
+     *          who can read your encrypted data can also read your key.
+     *
+     * Default: 0 (disabled)
+     *
+     * @see rampart_park
+     * @see rampart_unpark
+     */
+    int enable_parking;
+
+    /**
+     * @brief Encryption key for block parking (32 bytes)
+     *
+     * If NULL and enable_parking is set, a random key is generated
+     * using /dev/urandom (or a fallback PRNG if unavailable).
+     *
+     * If provided, must point to exactly 32 bytes of key material.
+     * The key is copied into pool memory; the original can be wiped
+     * after rampart_init() returns.
+     *
+     * Default: NULL (auto-generate)
+     */
+    const unsigned char *parking_key;
+
+    /**
+     * @brief Length of parking_key
+     *
+     * Must be 32 if parking_key is non-NULL. Ignored if parking_key
+     * is NULL.
+     *
+     * Default: 0
+     */
+    size_t parking_key_len;
 } rampart_config_t;
 
 /* ============================================================================
@@ -686,6 +761,85 @@ void *rampart_calloc(rampart_pool_t *pool, size_t nmemb, size_t elem_size);
  * @see rampart_validate
  */
 rampart_error_t rampart_free(rampart_pool_t *pool, void *ptr);
+
+/* ============================================================================
+ * Block Parking Functions (Encryption at Rest)
+ * ============================================================================ */
+
+/**
+ * rampart_park - Encrypt a block's contents in memory
+ *
+ * Parks a block by encrypting its user data region with ChaCha20.
+ * The plaintext is securely wiped after encryption. A parked block
+ * cannot be accessed or freed until it is unparked.
+ *
+ * This provides limited protection for sensitive data at rest in RAM.
+ * See the enable_parking configuration option for security limitations.
+ *
+ * @param pool      Pointer to the pool
+ * @param ptr       Pointer to block to park (as returned by rampart_alloc)
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_OK                   Block parked successfully
+ * @retval RAMPART_ERR_NULL_PARAM       pool or ptr is NULL
+ * @retval RAMPART_ERR_INVALID_BLOCK    ptr is not a valid allocation
+ * @retval RAMPART_ERR_BLOCK_PARKED     Block is already parked
+ * @retval RAMPART_ERR_PARKING_DISABLED Pool was not initialized with parking
+ * @retval RAMPART_ERR_WRONG_THREAD     Called from non-owning thread
+ *
+ * @note Thread-safe if called from the owning thread.
+ * @note Guard bands are validated before parking.
+ * @note The block remains allocated; only its contents are encrypted.
+ *
+ * @see rampart_unpark
+ * @see rampart_is_parked
+ */
+rampart_error_t rampart_park(rampart_pool_t *pool, void *ptr);
+
+/**
+ * rampart_unpark - Decrypt a parked block's contents
+ *
+ * Unparks a block by decrypting its user data region. After unparking,
+ * the block can be accessed and freed normally.
+ *
+ * @param pool      Pointer to the pool
+ * @param ptr       Pointer to parked block
+ *
+ * @return RAMPART_OK on success, error code on failure
+ *
+ * @retval RAMPART_OK                   Block unparked successfully
+ * @retval RAMPART_ERR_NULL_PARAM       pool or ptr is NULL
+ * @retval RAMPART_ERR_INVALID_BLOCK    ptr is not a valid allocation
+ * @retval RAMPART_ERR_NOT_PARKED       Block is not parked
+ * @retval RAMPART_ERR_PARKING_DISABLED Pool was not initialized with parking
+ * @retval RAMPART_ERR_WRONG_THREAD     Called from non-owning thread
+ *
+ * @note Thread-safe if called from the owning thread.
+ * @note Guard bands are restored after unparking.
+ *
+ * @see rampart_park
+ * @see rampart_is_parked
+ */
+rampart_error_t rampart_unpark(rampart_pool_t *pool, void *ptr);
+
+/**
+ * rampart_is_parked - Check if a block is parked
+ *
+ * Returns whether a block is currently in the parked (encrypted) state.
+ *
+ * @param pool      Pointer to the pool
+ * @param ptr       Pointer to block to check
+ *
+ * @return 1 if parked, 0 if not parked or on error
+ *
+ * @note Returns 0 for invalid blocks or NULL parameters.
+ * @note Thread-safe.
+ *
+ * @see rampart_park
+ * @see rampart_unpark
+ */
+int rampart_is_parked(rampart_pool_t *pool, void *ptr);
 
 /* ============================================================================
  * Validation Functions

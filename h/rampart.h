@@ -230,7 +230,16 @@ typedef enum rampart_error_e {
      * Returned when attempting park/unpark operations on a pool
      * that was not initialized with enable_parking set.
      */
-    RAMPART_ERR_PARKING_DISABLED = -13
+    RAMPART_ERR_PARKING_DISABLED = -13,
+
+    /**
+     * @brief Entropy source unavailable
+     *
+     * Returned when cryptographic random number generation fails
+     * because /dev/urandom is unavailable. There is no fallback;
+     * weak randomness is not acceptable for security features.
+     */
+    RAMPART_ERR_ENTROPY_SOURCE = -14
 } rampart_error_t;
 
 /* ============================================================================

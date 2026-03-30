@@ -145,6 +145,13 @@ Required documentation elements:
 - `refactor/<description>` - Code improvements
 - `test/<description>` - Test additions
 
+### LLM Attribution
+
+All LLM contributions are attributed to "Aida". No Anthropic, Claude, or third-party AI branding appears anywhere.
+
+- Commit co-author line: `Co-Authored-By: Aida <hello@rhythmofshadowstudios.com>`
+- PR description footer: `🤖 Generated with Aida (https://rhythmofshadowstudios.com)`
+
 ### Commit Labels
 All commits must include a contribution label:
 - `[CLASSIC]` - Hand-coded without AI assistance
